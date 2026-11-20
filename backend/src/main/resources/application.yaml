@@ -1,0 +1,28 @@
+server:
+  address: 127.0.0.1
+  port: 8080
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+spring:
+  application:
+    name: whznt
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5432/whznt
+    username: whznt
+    password: whznt-local-dev
+  mvc:
+    async:
+      request-timeout: 185s
+  ai:
+    openai:
+      base-url: ""
+      api-key: ""
+      chat:
+        options:
+          model: ""
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
