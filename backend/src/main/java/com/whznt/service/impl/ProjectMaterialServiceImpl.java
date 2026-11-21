@@ -42,12 +42,12 @@ public class ProjectMaterialServiceImpl extends ServiceImpl<ProjectMaterialMappe
 
     @Override
     public List<ProjectViews.Material> materials(long projectId) {
-        return projectRows(projectId).stream().map(this::view).toList();
+        return listForProject(projectId).stream().map(this::view).toList();
     }
 
     @Override
-    public List<Long> currentVersionIds(long projectId) {
-        return projectRows(projectId).stream().map(ProjectMaterial::getCurrentVersionId).toList();
+    public List<ProjectMaterial> listForProject(long projectId) {
+        return lambdaQuery().eq(ProjectMaterial::getProjectId, projectId).orderByAsc(ProjectMaterial::getId).list();
     }
 
     @Override
@@ -153,7 +153,7 @@ public class ProjectMaterialServiceImpl extends ServiceImpl<ProjectMaterialMappe
     }
 
     private Map<Long, ProjectMaterial> versionMaterials(long projectId, Collection<Long> ids) {
-        Map<Long, ProjectMaterial> available = projectRows(projectId).stream()
+        Map<Long, ProjectMaterial> available = listForProject(projectId).stream()
                 .collect(Collectors.toMap(ProjectMaterial::getId, Function.identity()));
         Map<Long, ProjectMaterial> result = versions.selectByIds(ids).stream()
                 .filter(version -> available.containsKey(version.getMaterialId()))
@@ -162,10 +162,6 @@ public class ProjectMaterialServiceImpl extends ServiceImpl<ProjectMaterialMappe
             throw WorkspaceException.notFound("找不到对应的资料版本。");
         }
         return result;
-    }
-
-    private List<ProjectMaterial> projectRows(long projectId) {
-        return lambdaQuery().eq(ProjectMaterial::getProjectId, projectId).orderByAsc(ProjectMaterial::getId).list();
     }
 
     private ProjectMaterial requireMaterial(long projectId, long materialId) {

@@ -85,24 +85,18 @@ public class ProjectArtifactServiceImpl extends ServiceImpl<ProjectArtifactMappe
     }
 
     @Override
-    public DraftVersion requireVersion(long projectId, long versionId) {
+    public ArtifactVersion requireVersion(long projectId, long versionId) {
         DraftVersion version = versions.getById(versionId);
         if (version == null) {
             throw WorkspaceException.notFound("找不到这个成果版本。");
         }
-        artifactForVersion(projectId, version);
-        return version;
-    }
-
-    @Override
-    public ProjectViews.Upstream describeVersion(long projectId, long versionId) {
-        DraftVersion version = versions.getById(versionId);
-        if (version == null) {
-            throw WorkspaceException.notFound("找不到上游成果版本。");
+        Draft draft = drafts.getById(version.getDraftId());
+        ProjectArtifact artifact = lambdaQuery().eq(ProjectArtifact::getProjectId, projectId)
+                .eq(ProjectArtifact::getConversationId, draft.getConversationId()).one();
+        if (artifact == null) {
+            throw WorkspaceException.notFound("找不到这个项目的成果版本。");
         }
-        ProjectArtifact artifact = artifactForVersion(projectId, version);
-        return new ProjectViews.Upstream(artifact.getStep(), artifact.getConversationId(), version.getId(),
-                version.getTitle());
+        return new ArtifactVersion(artifact.getStep(), artifact.getConversationId(), version);
     }
 
     @Override
@@ -123,8 +117,11 @@ public class ProjectArtifactServiceImpl extends ServiceImpl<ProjectArtifactMappe
         projects.requireOwned(ownerId, projectId);
         requireVersion(projectId, versionId);
         ProjectGeneration.Sources sources = references(projectId, versionId);
-        return new ProjectViews.Sources(sources.upstreamVersionIds().stream()
-                .map(id -> describeVersion(projectId, id)).toList(), materials.resolve(projectId, sources.passageIds()));
+        List<ProjectViews.Upstream> upstream = sources.upstreamVersionIds().stream().map(id -> {
+            ArtifactVersion source = requireVersion(projectId, id);
+            return new ProjectViews.Upstream(source.step(), source.conversationId(), id, source.version().getTitle());
+        }).toList();
+        return new ProjectViews.Sources(upstream, materials.resolve(projectId, sources.passageIds()));
     }
 
     @Override
@@ -177,16 +174,6 @@ public class ProjectArtifactServiceImpl extends ServiceImpl<ProjectArtifactMappe
         artifact.setSlot(slot);
         artifact.setTopic(topic);
         save(artifact);
-        return artifact;
-    }
-
-    private ProjectArtifact artifactForVersion(long projectId, DraftVersion version) {
-        Draft draft = drafts.getById(version.getDraftId());
-        ProjectArtifact artifact = lambdaQuery().eq(ProjectArtifact::getProjectId, projectId)
-                .eq(ProjectArtifact::getConversationId, draft.getConversationId()).one();
-        if (artifact == null) {
-            throw WorkspaceException.notFound("找不到这个项目的成果版本。");
-        }
         return artifact;
     }
 

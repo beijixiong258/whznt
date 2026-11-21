@@ -16,7 +16,7 @@ public final class WorkspaceRequests {
 
     public record Register(
             @NotBlank(message = "请输入手机号。") String phone,
-            @NotBlank(message = "请输入密码。") String password) {
+            @NotNull(message = "请输入密码。") String password) {
     }
 
     public record Rename(

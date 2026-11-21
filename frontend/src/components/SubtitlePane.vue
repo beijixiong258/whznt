@@ -194,7 +194,7 @@ onBeforeUnmount(() => window.clearInterval(poll))
               :disabled="busy" tips="H.264 编码的 MP4，不超过 512 MB" />
           </t-form-item>
           <t-form-item label="字幕来源">
-            <t-radio-group v-model="mode" :disabled="busy" variant="default-filled" class="utility-choices">
+            <t-radio-group v-model="mode" :disabled="busy" variant="outline" class="utility-choices">
               <t-radio-button v-for="[value, label] in modeOptions" :key="value" :value="value">{{ label }}</t-radio-button>
             </t-radio-group>
           </t-form-item>

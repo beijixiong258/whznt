@@ -17,12 +17,14 @@ public interface ProjectArtifactService extends IService<ProjectArtifact> {
     ProjectArtifact inSlot(long projectId, ProjectStep step, String slot);
     ProjectArtifact require(long projectId, long artifactId);
     DraftVersion current(ProjectArtifact artifact);
-    ProjectViews.Upstream describeVersion(long projectId, long versionId);
-    DraftVersion requireVersion(long projectId, long versionId);
+    ArtifactVersion requireVersion(long projectId, long versionId);
     ProjectGeneration.Sources references(long projectId, long versionId);
     ProjectViews.Sources readSources(long ownerId, long projectId, long versionId);
     ProjectViews.Artifact importArtifact(long ownerId, long projectId, ProjectRequests.ExistingArtifact request);
     Saved publish(PersonProject project, ProjectGeneration.Plan plan, String content, List<Long> passageIds, String model);
+
+    record ArtifactVersion(ProjectStep step, long conversationId, DraftVersion version) {
+    }
 
     record Saved(long conversationId, long versionId) {
     }

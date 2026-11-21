@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { MessagePlugin } from 'tdesign-vue-next'
+import {
+  Card as TCard, Collapse as TCollapse, CollapsePanel as TCollapsePanel, Link as TLink, MessagePlugin,
+  RadioButton as TRadioButton, RadioGroup as TRadioGroup,
+} from 'tdesign-vue-next'
 import { api, ApiError, errorMessage, jsonBody, loadConversation, streamGeneration, StreamInterrupted } from '../api'
 import type {
   ConversationDetail, DraftVersion, GenerationRequest, Manuscript, ModelStatus,
@@ -287,44 +290,44 @@ onBeforeUnmount(() => abort?.abort())
     <t-alert v-if="error" theme="warning" :message="error" close @close="error = ''" />
     <div class="writing-grid" :class="{ 'project-writing': projectId !== null }">
       <div v-if="projectId === null" class="setup-column">
-        <section class="work-card setup-card">
+        <t-card class="work-card">
           <h2>稿件设置</h2>
-          <div class="format-switch" role="group" aria-label="稿件文体">
-            <button :class="{ selected: form.format === 'TALK' }" :aria-pressed="form.format === 'TALK'"
-              :disabled="busy" @click="form.format = 'TALK'">短视频口播</button>
-            <button :class="{ selected: form.format === 'ARTICLE' }" :aria-pressed="form.format === 'ARTICLE'"
-              :disabled="busy" @click="form.format = 'ARTICLE'">图文稿</button>
-          </div>
+          <t-radio-group v-model="form.format" variant="outline" class="format-switch" aria-label="稿件文体"
+            :disabled="busy">
+            <t-radio-button value="TALK">短视频口播</t-radio-button>
+            <t-radio-button value="ARTICLE">图文稿</t-radio-button>
+          </t-radio-group>
           <div class="field">
             <label for="topic">主题 <span>选填</span></label>
-            <t-textarea id="topic" v-model="form.topic" placeholder="例如，第一次拍口播，怎么讲得自然一点？"
+            <t-textarea v-field-id="'topic'" v-model="form.topic" placeholder="例如，第一次拍口播，怎么讲得自然一点？"
               :autosize="{ minRows: 3, maxRows: 5 }" :maxlength="300" :disabled="busy"
               @change="form.angle = ''" />
             <span v-if="form.angle" class="idea-angle">{{ form.angle }}</span>
           </div>
-          <details class="writing-options">
-            <summary>受众、语气和参考资料</summary>
-            <div class="field">
-              <label for="audience">目标受众</label>
-              <t-input id="audience" v-model="form.audience" placeholder="例如，刚开始出镜的创作者"
-                :maxlength="120" :disabled="busy" />
-            </div>
-            <div class="field">
-              <label for="tone">语气</label>
-              <t-input id="tone" v-model="form.tone" placeholder="例如，像跟朋友分享一个方法"
-                :maxlength="120" :disabled="busy" />
-            </div>
-            <div v-if="form.format === 'TALK'" class="field">
-              <label for="duration">口播时长（秒）</label>
-              <t-input-number id="duration" v-model="form.durationSeconds" :min="15" :max="600" :step="15"
-                :disabled="busy" />
-            </div>
-            <div class="field">
-              <label for="background">参考资料</label>
-              <t-textarea id="background" v-model="form.background" placeholder="粘贴希望用到的事实或文字素材"
-                :maxlength="12000" :autosize="{ minRows: 3, maxRows: 6 }" :disabled="busy" />
-            </div>
-          </details>
+          <t-collapse class="writing-options" borderless>
+            <t-collapse-panel header="受众、语气和参考资料">
+              <div class="field">
+                <label for="audience">目标受众</label>
+                <t-input v-field-id="'audience'" v-model="form.audience" placeholder="例如，刚开始出镜的创作者"
+                  :maxlength="120" :disabled="busy" />
+              </div>
+              <div class="field">
+                <label for="tone">语气</label>
+                <t-input v-field-id="'tone'" v-model="form.tone" placeholder="例如，像跟朋友分享一个方法"
+                  :maxlength="120" :disabled="busy" />
+              </div>
+              <div v-if="form.format === 'TALK'" class="field">
+                <label for="duration">口播时长（秒）</label>
+                <t-input-number v-field-id="'duration'" v-model="form.durationSeconds" :min="15" :max="600" :step="15"
+                  :disabled="busy" />
+              </div>
+              <div class="field">
+                <label for="background">参考资料</label>
+                <t-textarea v-field-id="'background'" v-model="form.background" placeholder="粘贴希望用到的事实或文字素材"
+                  :maxlength="12000" :autosize="{ minRows: 3, maxRows: 6 }" :disabled="busy" />
+              </div>
+            </t-collapse-panel>
+          </t-collapse>
           <div class="setup-actions">
             <t-button size="large" block :loading="operation === 'generate'"
               :disabled="busy || showingOld || !model.available" @click="generate()">
@@ -333,8 +336,8 @@ onBeforeUnmount(() => abort?.abort())
             <t-button size="large" block variant="outline" :loading="operation === 'ideas'"
               :disabled="busy || showingOld || !model.available" @click="findIdeas">先看三个方向</t-button>
           </div>
-        </section>
-        <section v-if="ideas.length" class="work-card ideas-card">
+        </t-card>
+        <t-card v-if="ideas.length" class="work-card">
           <h2>选题方向</h2>
           <article v-for="idea in ideas" :key="idea.title" class="idea-row">
             <h3>{{ idea.title }}</h3>
@@ -343,23 +346,22 @@ onBeforeUnmount(() => abort?.abort())
             <p class="secondary-text">收获 · {{ idea.takeaway }}</p>
             <t-button size="small" variant="text" :disabled="busy || showingOld" @click="chooseIdea(idea)">用这个选题写稿</t-button>
           </article>
-        </section>
+        </t-card>
       </div>
-      <section class="work-card editor-card" :aria-busy="busy">
+      <t-card class="work-card editor-card" body-class-name="editor-body" :aria-busy="busy">
         <div class="editor-heading">
           <div>
             <h2>稿件</h2>
             <span class="secondary-text">{{ showingOld ? '查看旧版' : changed ? '有未保存的修改' : draft ? '已保存' : '未保存' }}</span>
           </div>
-          <t-select v-if="versionOptions.length" class="version-select" aria-label="查看稿件版本"
+          <label v-if="versionOptions.length" class="sr-only" for="draft-version">查看稿件版本</label>
+          <t-select v-if="versionOptions.length" v-field-id="'draft-version'" class="version-select"
             :options="versionOptions" :model-value="version?.version.id" :disabled="busy" @change="selectVersion" />
         </div>
-        <div class="editor-tabs" role="group" aria-label="稿件视图">
-          <button :class="{ selected: mode === 'edit' }" :aria-pressed="mode === 'edit'"
-            :disabled="operation === 'generate'" @click="mode = 'edit'">编辑</button>
-          <button :class="{ selected: mode === 'preview' }" :aria-pressed="mode === 'preview'"
-            @click="mode = 'preview'">预览</button>
-        </div>
+        <t-radio-group v-model="mode" variant="outline" class="editor-tabs" aria-label="稿件视图">
+          <t-radio-button value="edit" :disabled="operation === 'generate'">编辑</t-radio-button>
+          <t-radio-button value="preview">预览</t-radio-button>
+        </t-radio-group>
         <div v-if="operation === 'generate'" class="document-preview">
           <MarkdownView v-if="partial" :content="partial" />
           <t-loading v-else text="正在起稿" />
@@ -388,14 +390,16 @@ onBeforeUnmount(() => abort?.abort())
             <t-button v-if="projectId === null && !showingOld && version?.writingInput" variant="outline"
               :disabled="busy || !model.available" @click="generate('REGENERATE')">重新生成</t-button>
             <t-button variant="text" theme="default" :disabled="!content.trim() || busy" @click="copy">复制</t-button>
-            <a v-if="exportHref" class="export-link" :href="exportHref" title="导出所选的已保存版本">导出 Markdown</a>
+            <t-link v-if="exportHref" :href="exportHref" theme="primary" title="导出所选的已保存版本">
+              导出 Markdown
+            </t-link>
             <t-button v-if="draft && version" variant="outline" size="small" :disabled="busy"
               @click="emit('subtitle', { draftId: draft.id, versionId: version.version.id, title: version.version.title })">
               给这版稿配字幕
             </t-button>
           </template>
         </div>
-      </section>
+      </t-card>
       <ProjectSources v-if="projectId !== null && version" ref="sources" :project-id="projectId"
         :version-id="version.version.id" @loaded="citationIds = $event"
         @open="(id, number) => emit('upstream', id, number)" />
@@ -406,7 +410,7 @@ onBeforeUnmount(() => abort?.abort())
       <div v-if="rewrite" class="rewrite-dialog">
         <div v-if="rewrite.action === 'TONE' && rewrite.result === null" class="field">
           <label for="rewrite-tone">目标语气</label>
-          <t-input id="rewrite-tone" v-model="rewrite.tone" :maxlength="120"
+          <t-input v-field-id="'rewrite-tone'" v-model="rewrite.tone" :maxlength="120"
             placeholder="例如，更直接、更口语" :disabled="busy" @enter="requestRewrite" />
         </div>
         <div class="rewrite-text">

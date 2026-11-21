@@ -12,19 +12,25 @@ const ProjectsPane = defineAsyncComponent(() => import('./ProjectsPane.vue'))
 const SubtitlePane = defineAsyncComponent(() => import('./SubtitlePane.vue'))
 const RechargePane = defineAsyncComponent(() => import('./RechargePane.vue'))
 
-type Pane = 'write' | 'chat' | 'history' | 'projects' | 'subtitles' | 'recharge'
+const navigation = [
+  { id: 'write', label: '写稿', icon: Edit1Icon },
+  { id: 'chat', label: '自由对话', icon: ChatIcon },
+  { id: 'projects', label: '人物项目', icon: UserIcon },
+  { id: 'subtitles', label: '视频字幕', icon: VideoIcon },
+  { id: 'history', label: '历史', icon: TimeIcon },
+  { id: 'recharge', label: '充值申请', icon: WalletIcon },
+] as const
+type Pane = typeof navigation[number]['id']
 
 const props = defineProps<{ account: Account }>()
 const emit = defineEmits<{ logout: [] }>()
 const pane = ref<Pane>('write')
+const opened = reactive(new Set<Pane>())
 const writing = ref<ConversationDetail | null>(null)
 const chatting = ref<ConversationDetail | null>(null)
 const writeKey = ref(0)
 const initialVersion = ref<number>()
 const projectId = ref<number | null>(null)
-const projectsOpened = ref(false)
-const subtitlesOpened = ref(false)
-const rechargeOpened = ref(false)
 const subtitleReference = ref<DraftReference>()
 const chatKey = ref(0)
 const historyKey = ref(0)
@@ -38,8 +44,11 @@ const pendingAction = ref<(() => void) | null>(null)
 
 const phoneLabel = computed(() => props.account.phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1 **** $2'))
 const anyBusy = computed(() => busy.write || busy.chat)
-const paneLabels: Record<Pane, string> = {
-  write: '写稿', chat: '自由对话', history: '历史', projects: '人物项目', subtitles: '视频字幕', recharge: '充值申请',
+const paneLabel = computed(() => navigation.find(item => item.id === pane.value)?.label)
+
+function openPane(next: Pane) {
+  opened.add(next)
+  pane.value = next
 }
 
 async function loadModel() {
@@ -87,7 +96,7 @@ function startNew(kind: 'write' | 'chat') {
       chatKey.value++
     }
     dirty[kind] = false
-    pane.value = kind
+    openPane(kind)
   }))
 }
 
@@ -96,21 +105,14 @@ function openHistory(id: number, kind: 'WRITING' | 'CHAT', version?: number) {
   whileIdle(() => confirmDiscard(target, () => void openConversation(id, version)))
 }
 
-function openProjects(id?: number) {
-  if (id !== undefined) projectId.value = id
-  projectsOpened.value = true
-  pane.value = 'projects'
+function openProjects(id: number) {
+  projectId.value = id
+  openPane('projects')
 }
 
-function openSubtitles(reference?: DraftReference) {
-  if (reference) subtitleReference.value = reference
-  subtitlesOpened.value = true
-  pane.value = 'subtitles'
-}
-
-function openRecharge() {
-  rechargeOpened.value = true
-  pane.value = 'recharge'
+function openSubtitles(reference: DraftReference) {
+  subtitleReference.value = reference
+  openPane('subtitles')
 }
 
 async function openConversation(id: number, version?: number) {
@@ -122,12 +124,12 @@ async function openConversation(id: number, version?: number) {
       initialVersion.value = version
       writeKey.value++
       dirty.write = false
-      pane.value = 'write'
+      openPane('write')
     } else {
       chatting.value = detail
       chatKey.value++
       dirty.chat = false
-      pane.value = 'chat'
+      openPane('chat')
     }
   } catch (failure) {
     alert.value = errorMessage(failure)
@@ -150,34 +152,31 @@ onMounted(() => void loadModel())
 <template>
   <div class="shell">
     <aside class="rail">
-      <div class="brand-lockup"><img class="brand-mark" src="/brand.png" alt="" width="44" height="44">创作工作台</div>
+      <div class="brand-lockup"><img class="brand-mark" src="/brand.png" alt="" width="44" height="44">网红内容生成平台</div>
       <nav class="rail-nav" aria-label="工作台">
-        <button :class="{ active: pane === 'write' }" :aria-current="pane === 'write' ? 'page' : undefined"
-          @click="pane = 'write'"><Edit1Icon /> 写稿</button>
-        <button :class="{ active: pane === 'chat' }" :aria-current="pane === 'chat' ? 'page' : undefined"
-          @click="pane = 'chat'"><ChatIcon /> 自由对话</button>
-        <button :class="{ active: pane === 'projects' }" :aria-current="pane === 'projects' ? 'page' : undefined"
-          @click="openProjects()"><UserIcon /> 人物项目</button>
-        <button :class="{ active: pane === 'subtitles' }" :aria-current="pane === 'subtitles' ? 'page' : undefined"
-          @click="openSubtitles()"><VideoIcon /> 视频字幕</button>
-        <button :class="{ active: pane === 'history' }" :aria-current="pane === 'history' ? 'page' : undefined"
-          @click="pane = 'history'"><TimeIcon /> 历史</button>
-        <button :class="{ active: pane === 'recharge' }" :aria-current="pane === 'recharge' ? 'page' : undefined"
-          @click="openRecharge"><WalletIcon /> 充值申请</button>
+        <t-button v-for="item in navigation" :key="item.id" size="large"
+          :variant="pane === item.id ? 'base' : 'text'" :theme="pane === item.id ? 'primary' : 'default'"
+          :aria-current="pane === item.id ? 'page' : undefined" @click="openPane(item.id)">
+          <template #icon><component :is="item.icon" /></template>
+          {{ item.label }}
+        </t-button>
       </nav>
       <div class="rail-footer">
         <span class="account-label">{{ phoneLabel }}</span>
-        <button class="logout-button" aria-label="退出登录" title="退出登录" @click="logout"><LogoutIcon /></button>
+        <t-button variant="text" theme="default" shape="square" aria-label="退出登录" title="退出登录" @click="logout">
+          <template #icon><LogoutIcon /></template>
+        </t-button>
       </div>
     </aside>
 
     <main class="work-area">
       <header class="top-bar">
-        <div class="breadcrumb">{{ paneLabels[pane] }}</div>
+        <div class="breadcrumb">{{ paneLabel }}</div>
         <div class="top-actions">
-          <span class="model-state" :class="{ ready: model.available }" :title="model.message ?? '可以使用 AI 创作'">
-            <i aria-hidden="true"></i>{{ !modelLoaded ? '读取模型状态' : model.available ? '模型已配置' : '模型待配置' }}
-          </span>
+          <t-tag variant="light" :theme="!modelLoaded ? 'default' : model.available ? 'success' : 'warning'"
+            :title="model.message ?? '可以使用 AI 创作'">
+            {{ !modelLoaded ? '读取模型状态' : model.available ? '模型已配置' : '模型待配置' }}
+          </t-tag>
           <t-button v-if="pane === 'write' || pane === 'chat'" size="small" variant="outline" theme="default"
             @click="startNew(pane === 'write' ? 'write' : 'chat')">
             {{ pane === 'write' ? '新写稿' : '新对话' }}
@@ -194,11 +193,11 @@ onMounted(() => void loadModel())
         <ChatPane v-show="pane === 'chat'" :key="chatKey" :initial="chatting" :model="model"
           @saved="historyKey++" @dirty="dirty.chat = $event" @busy="busy.chat = $event" />
         <HistoryPane v-if="pane === 'history'" :key="historyKey" :opening="opening" @open="openHistory" />
-        <ProjectsPane v-if="projectsOpened" v-show="pane === 'projects'" :active="pane === 'projects'"
+        <ProjectsPane v-if="opened.has('projects')" v-show="pane === 'projects'" :active="pane === 'projects'"
           :model="model" :requested-id="projectId" @open="(id, version) => openHistory(id, 'WRITING', version)" />
-        <SubtitlePane v-if="subtitlesOpened" v-show="pane === 'subtitles'" :active="pane === 'subtitles'"
+        <SubtitlePane v-if="opened.has('subtitles')" v-show="pane === 'subtitles'" :active="pane === 'subtitles'"
           :requested-reference="subtitleReference" />
-        <RechargePane v-if="rechargeOpened" v-show="pane === 'recharge'" :active="pane === 'recharge'" />
+        <RechargePane v-if="opened.has('recharge')" v-show="pane === 'recharge'" :active="pane === 'recharge'" />
       </div>
     </main>
 

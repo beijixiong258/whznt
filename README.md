@@ -1,22 +1,20 @@
 # 使用方法
 
-## 启动
+## 端口与启动
 
-启动 Docker Desktop，在项目根目录打开 PowerShell 7。将 DeepSeek API Key 填入 `backend/src/main/resources/application.yaml` 的 `spring.ai.openai.api-key`。使用充值申请时，在项目根目录新建 `config` 文件夹，把自己的收款码存为 `config/recharge-qr.png`。
+| 服务 | 默认端口 | 用途 |
+| --- | --- | --- |
+| 前端 | `5173` | 本机工作台 |
+| Spring Boot | `8080` | 容器内 API |
+| PostgreSQL（`postgres:16-alpine`） | `5432` | 本机数据库连接 |
 
-首次构建需要联网下载依赖和语音模型。运行下列命令后，打开 [本机工作台](http://127.0.0.1:8090)，用手机号和密码创建账号并登录。
-
-```powershell
-docker compose up -d --build --wait
-```
-
-端口冲突时，在当前 PowerShell 窗口为 `WHZNT_WEB_PORT` 或 `WHZNT_DB_PORT` 指定空闲端口，再启动。
-
-从本机 Java 运行方式切换到容器时，若已有资料原件，先在同一 PowerShell 窗口设置以下变量，再运行启动命令。此前自定义过存储目录的，改填对应的 `originals` 目录。以后重建容器时沿用此设置。
+启动 Docker Desktop 后，在项目根目录执行下面的命令。
 
 ```powershell
-$env:WHZNT_LEGACY_ORIGINALS = Join-Path $env:LOCALAPPDATA 'whznt\data\originals'
+docker compose up -d
 ```
+
+启动完成后打开 [本机工作台](http://127.0.0.1:5173)。测试结束后运行 `docker compose stop`。
 
 ## 写稿
 
@@ -41,16 +39,8 @@ $env:WHZNT_LEGACY_ORIGINALS = Join-Path $env:LOCALAPPDATA 'whznt\data\originals'
 
 ## 充值申请
 
+启用充值申请时，将收款码保存为 `config/recharge-qr.png`。
+
 1. 打开「充值申请」，选择预设金额或输入实际支付金额。
 2. 使用页面中的二维码付款，上传 PNG 或 JPG 付款截图，按需填写备注。
 3. 点「提交申请」，保存页面显示的申请编号。之后可在「我的申请记录」中查回。
-
-## 停止
-
-在项目根目录运行 `docker compose stop`。下次运行 `docker compose up -d --wait`，可继续使用已有记录。
-
-## 本机调试
-
-使用本机 JDK 17、Maven 和 Node.js。在项目根目录运行 `docker compose up -d database` 和 `npm.cmd ci --prefix .\backend\qmd`。分别在 `backend` 运行 `mvn.cmd spring-boot:run`，在 `frontend` 运行 `npm.cmd ci` 和 `npm.cmd run dev`。调试页为 [127.0.0.1:5173](http://127.0.0.1:5173)。
-
-要在本机调试字幕，将 FFmpeg 和 FFprobe 加入 PATH，在 `backend` 运行 `python -m pip install -r subtitle/requirements.txt` 安装语音依赖。要调试充值，将运行后端的 PowerShell 窗口中的 `WHZNT_RECHARGE_QR_FILE` 设为收款码的绝对路径。退出调试时在前后端终端按 `Ctrl+C`。

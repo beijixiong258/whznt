@@ -5,6 +5,7 @@ import com.whznt.dto.ProjectRequests;
 import com.whznt.entity.DraftVersion;
 import com.whznt.entity.PersonProject;
 import com.whznt.entity.ProjectArtifact;
+import com.whznt.entity.ProjectMaterial;
 import com.whznt.entity.ProjectStep;
 import com.whznt.exception.WorkspaceException;
 import lombok.RequiredArgsConstructor;
@@ -53,11 +54,12 @@ public class ProjectPlanService {
                 }
             }
         }
-        List<Long> materialVersions = materials.currentVersionIds(projectId);
+        List<ProjectMaterial> projectMaterials = materials.listForProject(projectId);
         if (project.getSummary().isBlank() && upstream.isEmpty()
-                && materials.materials(projectId).stream().noneMatch(material -> material.kind() != com.whznt.entity.ProjectMaterial.Kind.STYLE)) {
+                && projectMaterials.stream().allMatch(material -> material.getKind() == ProjectMaterial.Kind.STYLE)) {
             throw WorkspaceException.badRequest("请补充人物简介、采访资料或已有成果。");
         }
+        List<Long> materialVersions = projectMaterials.stream().map(ProjectMaterial::getCurrentVersionId).toList();
         return new ProjectGeneration.Plan(project.getOwnerId(), projectId, project.getName(), project.getSummary(),
                 step, target.slot(), existing == null ? null : existing.getId(), currentId, target.title(),
                 request.durationSeconds() == null ? 150 : request.durationSeconds(),
@@ -67,15 +69,18 @@ public class ProjectPlanService {
     private Target scriptTarget(long projectId, ProjectRequests.Generate request, ProjectArtifact selected) {
         if (selected != null) {
             Long originalTopic = artifacts.references(projectId, artifacts.current(selected).getId()).upstreamVersionIds()
-                    .stream().filter(id -> artifacts.describeVersion(projectId, id).step() == ProjectStep.TOPICS)
+                    .stream().filter(id -> artifacts.requireVersion(projectId, id).step() == ProjectStep.TOPICS)
                     .findFirst().orElse(null);
             return new Target(selected.getSlot(), selected.getTopic(), originalTopic);
         }
-        if (request.topicVersionId() == null || request.topicIndex() == null
-                || artifacts.describeVersion(projectId, request.topicVersionId()).step() != ProjectStep.TOPICS) {
+        if (request.topicVersionId() == null || request.topicIndex() == null) {
             throw WorkspaceException.badRequest("请选择一条项目选题。");
         }
-        DraftVersion version = artifacts.requireVersion(projectId, request.topicVersionId());
+        ProjectArtifactService.ArtifactVersion topic = artifacts.requireVersion(projectId, request.topicVersionId());
+        if (topic.step() != ProjectStep.TOPICS) {
+            throw WorkspaceException.badRequest("请选择一条项目选题。");
+        }
+        DraftVersion version = topic.version();
         List<String> titles = TopicTitles.parse(version.getContent());
         if (request.topicIndex() > titles.size()) {
             throw WorkspaceException.badRequest("这个选题已找不到，请刷新后重新选择。");

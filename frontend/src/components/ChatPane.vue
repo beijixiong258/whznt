@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { MessagePlugin } from 'tdesign-vue-next'
+import { Card as TCard, MessagePlugin } from 'tdesign-vue-next'
+import type { TextareaValue } from 'tdesign-vue-next'
 import { ApiError, errorMessage, loadConversation, streamGeneration, StreamInterrupted } from '../api'
 import type { ChatMessage, ConversationDetail, GenerationRequest, ModelStatus } from '../types'
 import MarkdownView from './MarkdownView.vue'
@@ -69,7 +70,7 @@ async function send() {
   }
 }
 
-function handleKey(event: KeyboardEvent) {
+function handleKey(_value: TextareaValue, { e: event }: { e: KeyboardEvent }) {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     void send()
@@ -93,7 +94,7 @@ onBeforeUnmount(() => abort?.abort())
     <div class="page-heading"><h1>自由对话</h1></div>
     <t-alert v-if="!model.available" theme="info" :message="model.message ?? '模型尚未就绪。'" />
     <t-alert v-if="error" theme="warning" :message="error" close @close="error = ''" />
-    <div class="conversation-thread" aria-live="polite" :aria-busy="sending">
+    <t-card class="conversation-thread" aria-live="polite" :aria-busy="sending">
       <div v-if="!hasConversation" class="empty-chat">说说你想写的内容，或聊聊稿子哪里不顺。</div>
       <article v-for="message in messages" :key="message.id" class="chat-message" :class="message.role.toLowerCase()">
         <div class="chat-meta">{{ message.role === 'USER' ? '你' : '创作助手' }}</div>
@@ -115,15 +116,16 @@ onBeforeUnmount(() => abort?.abort())
         </article>
       </template>
       <div ref="bottom"></div>
-    </div>
-    <div class="chat-composer">
-      <textarea v-model="input" aria-label="对话内容" placeholder="输入你想讨论的内容" rows="3"
-        :readonly="sending" maxlength="12000" @keydown="handleKey"></textarea>
+    </t-card>
+    <t-card class="chat-composer" body-class-name="chat-composer-content">
+      <label class="sr-only" for="chat-message">对话内容</label>
+      <t-textarea v-field-id="'chat-message'" v-model="input" placeholder="输入你想讨论的内容"
+        :autosize="{ minRows: 3, maxRows: 8 }" :readonly="sending" :maxlength="12000" @keydown="handleKey" />
       <div class="toolbar-between">
         <span class="secondary-text">Enter 发送 · Shift + Enter 换行</span>
         <t-button v-if="sending" variant="outline" @click="abort?.abort()">停止</t-button>
         <t-button v-else :disabled="!input.trim() || !model.available" @click="send">发送</t-button>
       </div>
-    </div>
+    </t-card>
   </section>
 </template>

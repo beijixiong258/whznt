@@ -12,7 +12,7 @@ import java.util.List;
 
 public interface ProjectMaterialService extends IService<ProjectMaterial> {
     List<ProjectViews.Material> materials(long projectId);
-    List<Long> currentVersionIds(long projectId);
+    List<ProjectMaterial> listForProject(long projectId);
     List<ProjectViews.Passage> passages(long projectId, Collection<Long> versionIds);
     List<ProjectViews.Passage> resolve(long projectId, List<Long> passageIds);
     ProjectViews.Material saveText(long ownerId, long projectId, ProjectRequests.TextMaterial request);

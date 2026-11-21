@@ -13,8 +13,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-
 @Service
 @RequiredArgsConstructor
 public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> implements AccountService {
@@ -27,8 +25,9 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
         if (!normalizedPhone.matches("1[3-9][0-9]{9}")) {
             throw WorkspaceException.badRequest("请输入 11 位大陆手机号。");
         }
-        if (password.length() < 8 || password.getBytes(StandardCharsets.UTF_8).length > 72) {
-            throw WorkspaceException.badRequest("密码至少 8 个字符，最多 72 个 UTF-8 字节。");
+        int length = password.codePointCount(0, password.length());
+        if (length < 6 || length > 20) {
+            throw WorkspaceException.badRequest("密码须为 6-20 个字符。");
         }
 
         Account account = new Account();

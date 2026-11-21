@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ChatIcon, Edit1Icon, TimeIcon } from 'tdesign-icons-vue-next'
+import { Empty as TEmpty, List as TList, ListItem as TListItem } from 'tdesign-vue-next'
 import { api, errorMessage, jsonBody } from '../api'
 import type { ConversationKind, ConversationRow, HistoryPage } from '../types'
 
@@ -78,25 +79,31 @@ onMounted(() => void fetchPage(1))
   <section class="history-pane">
     <div class="page-heading"><h1>历史</h1></div>
     <form class="history-search" @submit.prevent="search">
-      <t-input v-model="query" clearable placeholder="搜索会话标题" aria-label="搜索会话标题"
+      <label class="sr-only" for="history-search">搜索会话标题</label>
+      <t-input v-field-id="'history-search'" v-model="query" clearable placeholder="搜索会话标题"
         :maxlength="120" :disabled="pending" />
       <t-button type="submit" :loading="pending && page === 1">搜索</t-button>
     </form>
     <t-alert v-if="error" theme="error" :message="error" />
-    <div v-if="items.length" class="history-list" :aria-busy="opening || pending">
-      <article v-for="row in items" :key="row.id" class="history-row">
-        <span class="history-icon" aria-hidden="true"><Edit1Icon v-if="row.kind === 'WRITING'" /><ChatIcon v-else /></span>
-        <button class="history-name" :disabled="opening" @click="emit('open', row.id, row.kind)">
-          <strong>{{ row.title }}</strong>
-          <span>{{ row.kind === 'WRITING' ? '稿件' : '对话' }} · {{ formatter.format(new Date(row.updatedAt)) }}</span>
-        </button>
-        <t-button size="small" variant="text" theme="default" :disabled="opening" @click="openRename(row)">改名</t-button>
-      </article>
-    </div>
-    <div v-else-if="!pending && !error" class="empty-history">
-      <TimeIcon aria-hidden="true" />
-      <p>{{ currentQuery ? '没有找到匹配的标题。' : '保存稿件或开始对话后，记录会显示在这里。' }}</p>
-    </div>
+    <t-list v-if="items.length" class="history-list" split :aria-busy="opening || pending">
+      <t-list-item v-for="row in items" :key="row.id">
+        <div class="history-row">
+          <span class="history-icon" aria-hidden="true"><Edit1Icon v-if="row.kind === 'WRITING'" /><ChatIcon v-else /></span>
+          <t-button class="history-name" variant="text" theme="default" :disabled="opening"
+            @click="emit('open', row.id, row.kind)">
+            <strong>{{ row.title }}</strong>
+            <span class="secondary-text">
+              {{ row.kind === 'WRITING' ? '稿件' : '对话' }} · {{ formatter.format(new Date(row.updatedAt)) }}
+            </span>
+          </t-button>
+          <t-button size="small" variant="text" theme="default" :disabled="opening" @click="openRename(row)">改名</t-button>
+        </div>
+      </t-list-item>
+    </t-list>
+    <t-empty v-else-if="!pending && !error" class="empty-history"
+      :description="currentQuery ? '没有找到匹配的标题。' : '保存稿件或开始对话后，记录会显示在这里。'">
+      <template #image><TimeIcon aria-hidden="true" /></template>
+    </t-empty>
     <t-loading v-else-if="pending" text="正在读取历史" />
     <t-button v-if="hasMore" variant="outline" class="load-more" :loading="pending" @click="fetchPage(page + 1)">
       加载更多
@@ -105,7 +112,7 @@ onMounted(() => void fetchPage(1))
     <t-dialog :visible="renaming !== null" header="修改会话标题" :confirm-btn="{ content: '保存', loading: saving }"
       @cancel="closeRename" @close="closeRename" @confirm="rename">
       <label for="history-title">标题</label>
-      <t-input id="history-title" v-model="title" class="dialog-input" :maxlength="120" @enter="rename" />
+      <t-input v-field-id="'history-title'" v-model="title" class="dialog-input" :maxlength="120" @enter="rename" />
       <t-alert v-if="renameError" theme="error" :message="renameError" />
     </t-dialog>
   </section>

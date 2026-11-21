@@ -48,12 +48,13 @@ public class ProjectPromptService {
         Set<String> allowedIds = passages.stream().filter(part -> part.kind() != ProjectMaterial.Kind.STYLE)
                 .map(part -> String.valueOf(part.id())).collect(Collectors.toSet());
         List<Map<String, Object>> upstream = plan.upstreamVersionIds().stream().map(id -> {
-            DraftVersion version = artifacts.requireVersion(plan.projectId(), id);
+            ProjectArtifactService.ArtifactVersion source = artifacts.requireVersion(plan.projectId(), id);
+            DraftVersion version = source.version();
             String content = ScriptBudget.CITATION.matcher(version.getContent())
                     .replaceAll(mark -> allowedIds.contains(mark.group(1)) ? mark.group() : "");
             String origin = version.getSource() == DraftVersion.Source.GENERATED ? "生成稿"
                     : version.getBaseVersionId() == null ? "手动录入稿" : "用户编辑稿";
-            return Map.<String, Object>of("成果", artifacts.describeVersion(plan.projectId(), id).step().label(),
+            return Map.<String, Object>of("成果", source.step().label(),
                     "版本", id, "来源", origin, "正文", content);
         }).toList();
         List<Map<String, Object>> facts = passages.stream().filter(part -> part.kind() != ProjectMaterial.Kind.STYLE)

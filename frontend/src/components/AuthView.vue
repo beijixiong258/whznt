@@ -25,8 +25,9 @@ async function submit() {
     error.value = '请输入 11 位大陆手机号。'
     return
   }
-  if (password.value.length < 8 || new TextEncoder().encode(password.value).length > 72) {
-    error.value = '密码至少 8 个字符，最多 72 个 UTF-8 字节。'
+  const length = [...password.value].length
+  if (length < 6 || length > 20) {
+    error.value = '密码须为 6-20 个字符。'
     return
   }
 
@@ -52,11 +53,8 @@ async function submit() {
 <template>
   <main class="auth-layout">
     <aside class="auth-side">
-      <div class="brand-lockup"><img class="brand-mark" src="/brand.png" alt="" width="44" height="44">创作工作台</div>
-      <div>
-        <h1>把想法<br>写成能用的稿。</h1>
-        <p>从一个主题开始，或直接生成。随时找回改过的版本。</p>
-      </div>
+      <div class="brand-lockup"><img class="brand-mark" src="/brand.png" alt="" width="44" height="44">网红内容生成平台</div>
+      <h1>用这个的真老牧师了</h1>
     </aside>
     <section class="auth-card">
       <h2>{{ register ? '创建个人账号' : '登录工作台' }}</h2>
@@ -66,7 +64,7 @@ async function submit() {
             :maxlength="11" size="large" />
         </t-form-item>
         <t-form-item label="密码" name="password" for="password">
-          <t-input v-field-id="'password'" v-model="password" name="password" type="password" size="large" placeholder="至少 8 个字符"
+          <t-input v-field-id="'password'" v-model="password" name="password" type="password" size="large" placeholder="6-20 个字符"
             :autocomplete="register ? 'new-password' : 'current-password'" />
         </t-form-item>
         <t-alert v-if="error" theme="error" :message="error" />

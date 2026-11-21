@@ -28,7 +28,9 @@ public class ProjectSearchService {
         if (phrase.isBlank()) {
             throw WorkspaceException.badRequest("请输入要查找的关键词。");
         }
-        List<ProjectViews.Passage> passages = materials.passages(projectId, materials.currentVersionIds(projectId));
+        List<Long> materialVersions = materials.listForProject(projectId).stream()
+                .map(ProjectMaterial::getCurrentVersionId).toList();
+        List<ProjectViews.Passage> passages = materials.passages(projectId, materialVersions);
         Set<Long> ranked = new LinkedHashSet<>(qmd.search(projectId, passages, phrase, 16));
         String lowered = phrase.toLowerCase(Locale.ROOT);
         passages.stream()

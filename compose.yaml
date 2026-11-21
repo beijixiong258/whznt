@@ -4,7 +4,7 @@ services:
     image: whznt-frontend
     build: ./frontend
     ports:
-      - "127.0.0.1:${WHZNT_WEB_PORT:-8090}:80"
+      - "127.0.0.1:${WHZNT_WEB_PORT:-5173}:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -29,8 +29,7 @@ services:
       retries: 18
       start_period: 10s
   database:
-    image: whznt-database
-    build: ./database
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: whznt
       POSTGRES_USER: whznt

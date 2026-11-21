@@ -21,10 +21,12 @@
 - MyBatis-Plus 的实体服务保留 `IService<T>` 和 `service.impl` 下的 `ServiceImpl<M, T>`，Mapper 继承 `BaseMapper<T>`。同一实体的操作尽量归入同一 Service。用 Lombok 做构造器注入和日志，通用工具优先复用 Hutool。
 - 文本模型统一由 Spring AI 调用 DeepSeek 官方 API，默认使用 `deepseek-flash`。API Key 写在 `backend/src/main/resources/application.yaml` 的 `spring.ai.openai.api-key`，配置随 Spring Boot 应用打包。
 - 有依赖的步骤用 LangGraph4j，检查点复用 `langgraph4j-postgres-saver`。业务数据用 PostgreSQL，表结构由 Flyway 管理。QMD 用自己的 SQLite 索引，通过 Spring AI MCP 客户端连接。本地语音识别和对齐可独立选型，字幕合成用 FFmpeg。
-- `frontend/Dockerfile`、`backend/Dockerfile`、`database/Dockerfile` 分别构建 `whznt-frontend`、`whznt-backend`、`whznt-database`。根目录 `compose.yaml` 负责编排。Nginx 同源转发 `/api`，QMD 与字幕工具随后端镜像打包，业务文件和数据库数据放持久卷。
+- `frontend/Dockerfile` 和 `backend/Dockerfile` 分别构建 `whznt-frontend` 和 `whznt-backend`。根目录 `compose.yaml` 负责服务编排，PostgreSQL 使用官方镜像 `postgres:16-alpine`。Nginx 同源转发 `/api`，QMD 与字幕工具随后端镜像打包，业务文件和数据库数据放持久卷。
 
 ## 工作方式
 
 Windows 命令用 PowerShell 7。先读相关源码和已有包，优先复用。架构调整、跨模块改动、数据迁移及公共接口变更，先说明范围和验收方式并取得确认。
+
+开发阶段按当前数据模型和账号规则实现。旧的本地开发数据可按用户指定范围直接重置，兼容分支一并移除。项目从空库启动时由 Flyway 初始化。
 
 Java 源码按本次明确要求修改。运行 Maven 或 Java、编译、启动、清理 `target`，以及修改 `pom.xml`、`.idea` 或其他项目配置，均按用户针对本次任务的明确授权执行。测试按本次获准范围运行，交付时写明实际验证结果。提交和推送按用户明确要求进行。
