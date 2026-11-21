@@ -19,6 +19,7 @@ public class ProjectJobRunner {
     private final ProjectJobService jobs;
     private final PersonCreationWorkflow workflow;
     private volatile boolean ready;
+    private boolean recoverBeforeClaim;
 
     @EventListener(ApplicationReadyEvent.class)
     void recoverPendingJobs() {
@@ -31,10 +32,23 @@ public class ProjectJobRunner {
         if (!ready) {
             return;
         }
-        ProjectJob job = jobs.claimNext();
-        if (job == null) {
-            return;
+        try {
+            if (recoverBeforeClaim) {
+                jobs.recover();
+            }
+            ProjectJob job = jobs.claimNext();
+            if (job != null) {
+                run(job);
+            }
+            recoverBeforeClaim = false;
+        } catch (RuntimeException exception) {
+            recoverBeforeClaim = true;
+            log.warn("Unable to update the project job queue ({}). Recovery will be retried.",
+                    exception.getClass().getSimpleName());
         }
+    }
+
+    private void run(ProjectJob job) {
         try {
             workflow.run(job);
         } catch (Exception exception) {

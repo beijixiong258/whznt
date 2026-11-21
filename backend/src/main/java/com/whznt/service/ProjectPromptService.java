@@ -101,7 +101,13 @@ public class ProjectPromptService {
         originals.add(plan.summary());
         facts.forEach(row -> originals.add((String) row.get("原文")));
         supplied.forEach(row -> originals.add((String) row.get("正文")));
-        return StoryGrounding.retainSupportedClaims(reviewed, originals);
+        String story = StoryGrounding.retainSupportedClaims(reviewed, originals);
+        boolean hasBody = story.lines().map(String::stripLeading)
+                .anyMatch(line -> !line.startsWith("#") && ScriptBudget.countWords(line) > 0);
+        if (!hasBody) {
+            throw WorkspaceException.unavailable("复核后没有可保留的故事正文，请补充资料后重试。");
+        }
+        return story;
     }
 
     private String writeScript(List<Message> messages, ScriptBudget budget) {

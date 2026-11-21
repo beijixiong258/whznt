@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { Card as TCard, Link as TLink, MessagePlugin, Tabs as TTabs, TabPanel as TTabPanel, Upload as TUpload } from 'tdesign-vue-next'
 import type { UploadFile } from 'tdesign-vue-next'
 import { api, errorMessage, jsonBody } from '../api'
@@ -23,6 +23,7 @@ const focused = ref<MaterialPassage | null>(null)
 const error = ref('')
 const editError = ref('')
 const originalError = ref('')
+let versionRequest: AbortController | undefined
 const form = reactive({ name: '', kind: 'LIFE' as MaterialKind, text: '' })
 const kinds = Object.entries(materialLabels).map(([value, label]) => ({ value, label }))
 const versionOptions = computed(() => (viewing.value?.versions ?? []).map((row, index, all) => ({
@@ -99,16 +100,32 @@ function open(row: MaterialRow) {
 async function readVersion(id: unknown) {
   const row = viewing.value
   if (!row || typeof id !== 'number') return
+  versionRequest?.abort()
+  const request = new AbortController()
+  versionRequest = request
   reading.value = true
   originalError.value = ''
   try {
-    original.value = await api<MaterialText>(materialPath(row.id, id))
+    const result = await api<MaterialText>(materialPath(row.id, id), { signal: request.signal })
+    if (versionRequest === request) original.value = result
   } catch (failure) {
-    originalError.value = errorMessage(failure)
+    if (versionRequest === request) originalError.value = errorMessage(failure)
   } finally {
-    reading.value = false
+    if (versionRequest === request) {
+      versionRequest = undefined
+      reading.value = false
+    }
   }
 }
+
+function closeVersion() {
+  versionRequest?.abort()
+  versionRequest = undefined
+  viewing.value = null
+  reading.value = false
+}
+
+onBeforeUnmount(closeVersion)
 
 async function search() {
   if (fetching.value || !query.value.trim()) return
@@ -179,7 +196,7 @@ async function search() {
       <t-alert v-if="editError" theme="error" :message="editError" />
     </t-dialog>
     <t-dialog :visible="viewing !== null" :header="viewing?.name ?? '资料原文'" :footer="false"
-      width="min(680px, 92vw)" @close="viewing = null">
+      width="min(680px, 92vw)" @close="closeVersion">
       <div class="project-toolbar">
         <t-select :model-value="original?.version.id" :options="versionOptions" aria-label="资料版本"
           :disabled="reading" @change="readVersion" />

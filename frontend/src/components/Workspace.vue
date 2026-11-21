@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ChatIcon, Edit1Icon, LogoutIcon, TimeIcon, UserIcon, VideoIcon, WalletIcon } from 'tdesign-icons-vue-next'
 import { api, errorMessage, loadConversation } from '../api'
 import type { DraftReference } from '../subtitles'
@@ -30,12 +30,13 @@ const writing = ref<ConversationDetail | null>(null)
 const chatting = ref<ConversationDetail | null>(null)
 const writeKey = ref(0)
 const initialVersion = ref<number>()
-const projectId = ref<number | null>(null)
+const requestedProject = ref<{ id: number }>()
 const subtitleReference = ref<DraftReference>()
 const chatKey = ref(0)
 const historyKey = ref(0)
 const dirty = reactive({ write: false, chat: false })
 const busy = reactive({ write: false, chat: false })
+const subtitleState = ref({ dirty: false, busy: false })
 const model = ref<ModelStatus>({ available: false, message: '正在读取模型配置。' })
 const modelLoaded = ref(false)
 const alert = ref('')
@@ -44,6 +45,7 @@ const pendingAction = ref<(() => void) | null>(null)
 
 const phoneLabel = computed(() => props.account.phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1 **** $2'))
 const anyBusy = computed(() => busy.write || busy.chat)
+const hasUnsavedChanges = computed(() => dirty.write || dirty.chat || subtitleState.value.dirty)
 const paneLabel = computed(() => navigation.find(item => item.id === pane.value)?.label)
 
 function openPane(next: Pane) {
@@ -61,8 +63,8 @@ async function loadModel() {
   }
 }
 
-function whileIdle(action: () => void) {
-  if (anyBusy.value || opening.value) {
+function whileIdle(action: () => void, subtitleBusy = false) {
+  if (anyBusy.value || opening.value || subtitleBusy) {
     alert.value = '请先等待当前操作完成。'
     return
   }
@@ -70,8 +72,8 @@ function whileIdle(action: () => void) {
   action()
 }
 
-function confirmDiscard(mode: 'write' | 'chat' | 'both', action: () => void) {
-  const hasChanges = mode === 'both' ? dirty.write || dirty.chat : dirty[mode]
+function confirmDiscard(mode: 'write' | 'chat' | 'all', action: () => void) {
+  const hasChanges = mode === 'all' ? hasUnsavedChanges.value : dirty[mode]
   if (hasChanges) {
     pendingAction.value = action
   } else {
@@ -106,7 +108,7 @@ function openHistory(id: number, kind: 'WRITING' | 'CHAT', version?: number) {
 }
 
 function openProjects(id: number) {
-  projectId.value = id
+  requestedProject.value = { id }
   openPane('projects')
 }
 
@@ -139,13 +141,23 @@ async function openConversation(id: number, version?: number) {
 }
 
 function logout() {
-  whileIdle(() => confirmDiscard('both', () => {
+  whileIdle(() => confirmDiscard('all', () => {
     void api<void>('/api/auth/logout', { method: 'POST' })
       .then(() => emit('logout'))
       .catch(failure => { alert.value = errorMessage(failure) })
-  }))
+  }), subtitleState.value.busy)
 }
 
+function warnBeforeUnload(event: BeforeUnloadEvent) {
+  event.preventDefault()
+  event.returnValue = true
+}
+
+watch(hasUnsavedChanges, hasChanges => {
+  if (hasChanges) window.addEventListener('beforeunload', warnBeforeUnload)
+  else window.removeEventListener('beforeunload', warnBeforeUnload)
+})
+onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload))
 onMounted(() => void loadModel())
 </script>
 
@@ -194,9 +206,9 @@ onMounted(() => void loadModel())
           @saved="historyKey++" @dirty="dirty.chat = $event" @busy="busy.chat = $event" />
         <HistoryPane v-if="pane === 'history'" :key="historyKey" :opening="opening" @open="openHistory" />
         <ProjectsPane v-if="opened.has('projects')" v-show="pane === 'projects'" :active="pane === 'projects'"
-          :model="model" :requested-id="projectId" @open="(id, version) => openHistory(id, 'WRITING', version)" />
+          :model="model" :requested-project="requestedProject" @open="(id, version) => openHistory(id, 'WRITING', version)" />
         <SubtitlePane v-if="opened.has('subtitles')" v-show="pane === 'subtitles'" :active="pane === 'subtitles'"
-          :requested-reference="subtitleReference" />
+          :requested-reference="subtitleReference" @edit-state="subtitleState = $event" />
         <RechargePane v-if="opened.has('recharge')" v-show="pane === 'recharge'" :active="pane === 'recharge'" />
       </div>
     </main>

@@ -30,25 +30,29 @@ public class SubtitleJobRunner {
         if (!ready) {
             return;
         }
-        if (recoverBeforeClaim) {
-            subtitles.recover();
+        try {
+            if (recoverBeforeClaim) {
+                subtitles.recover();
+            }
+            SubtitleTask task = subtitles.claimNext();
+            if (task != null) {
+                run(task);
+            }
             recoverBeforeClaim = false;
+        } catch (RuntimeException exception) {
+            recoverBeforeClaim = true;
+            log.warn("Unable to update the subtitle queue ({}). Recovery will be retried.",
+                    exception.getClass().getSimpleName());
         }
-        SubtitleTask task = subtitles.claimNext();
-        if (task == null) {
-            return;
-        }
+    }
+
+    private void run(SubtitleTask task) {
         try {
             subtitles.perform(task);
         } catch (Exception exception) {
             log.warn("Subtitle task {} failed ({})", task.getId(), exception.getClass().getSimpleName());
-            try {
-                subtitles.fail(task, exception instanceof WorkspaceException expected
-                        ? expected.getMessage() : "任务未完成，视频和已保存的字幕仍可使用，请重试。");
-            } catch (RuntimeException persistenceFailure) {
-                recoverBeforeClaim = true;
-                log.warn("Unable to persist subtitle task status. Recovery will be retried.");
-            }
+            subtitles.fail(task, exception instanceof WorkspaceException expected
+                    ? expected.getMessage() : "任务未完成，视频和已保存的字幕仍可使用，请重试。");
         }
     }
 }

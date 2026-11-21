@@ -2,6 +2,7 @@ package com.whznt.integration;
 
 import com.whznt.exception.WorkspaceException;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -12,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -21,12 +23,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 @Component
 public class DocumentImport {
 
     private static final int MAX_CHARS = 200000;
     private static final int MAX_PASSAGE = 1000;
+    private static final Pattern PARAGRAPH_BREAK = Pattern.compile("\\R[\\t ]*\\R+");
 
     public record Segment(String location, String content) {
     }
@@ -95,73 +99,63 @@ public class DocumentImport {
     }
 
     private static List<Segment> paragraphs(String text) {
-        List<Segment> segments = new ArrayList<>();
-        int ordinal = 0;
-        for (String paragraph : text.split("\\R[\\t ]*\\R+")) {
-            if (!paragraph.isBlank()) {
-                append(segments, "第 " + ++ordinal + " 段", paragraph);
-            }
-        }
-        return segments;
+        PassageCollector passages = new PassageCollector();
+        PARAGRAPH_BREAK.splitAsStream(text).forEachOrdered(passages::addParagraph);
+        return passages.segments;
     }
 
     private static List<Segment> word(byte[] bytes) throws IOException {
         try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(bytes))) {
-            List<String> lines = new ArrayList<>();
-            wordParts(document.getBodyElements(), lines);
-            List<Segment> segments = new ArrayList<>();
-            for (int index = 0; index < lines.size(); index++) {
-                append(segments, "第 " + (index + 1) + " 段", lines.get(index));
-            }
-            return segments;
+            PassageCollector passages = new PassageCollector();
+            wordParts(document.getBodyElements(), passages);
+            return passages.segments;
         }
     }
 
-    private static void wordParts(List<IBodyElement> body, List<String> paragraphs) {
+    private static void wordParts(List<IBodyElement> body, PassageCollector passages) {
         for (IBodyElement element : body) {
-            if (element instanceof XWPFParagraph paragraph && !paragraph.getText().isBlank()) {
-                paragraphs.add(paragraph.getText());
+            if (element instanceof XWPFParagraph paragraph) {
+                passages.addParagraph(paragraph.getText());
             } else if (element instanceof XWPFTable table) {
                 table.getRows().forEach(row -> row.getTableCells()
-                        .forEach(cell -> wordParts(cell.getBodyElements(), paragraphs)));
+                        .forEach(cell -> wordParts(cell.getBodyElements(), passages)));
             }
         }
     }
 
     private static List<Segment> pdf(byte[] bytes) throws IOException {
         try (var document = Loader.loadPDF(bytes)) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            List<Segment> segments = new ArrayList<>();
-            int totalLength = 0;
-            for (int page = 1; page <= document.getNumberOfPages(); page++) {
-                stripper.setStartPage(page);
-                stripper.setEndPage(page);
-                String text = stripper.getText(document);
-                totalLength += text.length();
-                if (totalLength > MAX_CHARS) {
-                    throw WorkspaceException.badRequest("单份资料最多导入 20 万字。");
+            PassageCollector passages = new PassageCollector();
+            StringWriter pageText = new StringWriter();
+            PDFTextStripper stripper = new PDFTextStripper() {
+                private long totalLength;
+
+                @Override
+                protected void endPage(PDPage page) {
+                    String text = pageText.toString();
+                    totalLength += text.length();
+                    requireSupportedLength(totalLength);
+                    passages.add("第 " + getCurrentPageNo() + " 页", text);
+                    pageText.getBuffer().setLength(0);
                 }
-                append(segments, "第 " + page + " 页", text);
-            }
-            return segments;
+            };
+            stripper.writeText(document, pageText);
+            return passages.segments;
         }
     }
 
-    private static void append(List<Segment> result, String location, String content) {
-        String remaining = content.strip();
-        while (!remaining.isEmpty()) {
-            int end = Math.min(remaining.length(), MAX_PASSAGE);
-            if (end < remaining.length()) {
-                int split = Math.max(remaining.lastIndexOf('\n', end - 1), remaining.lastIndexOf('。', end - 1));
-                if (split >= end / 2) {
-                    end = split + 1;
-                } else if (Character.isHighSurrogate(remaining.charAt(end - 1))) {
-                    end--;
-                }
-            }
-            result.add(new Segment(location, remaining.substring(0, end).strip()));
-            remaining = remaining.substring(end).stripLeading();
+    private static int passageEnd(String text, int start) {
+        int end = Math.min(text.length(), start + MAX_PASSAGE);
+        if (end == text.length()) {
+            return end;
         }
+        for (int index = end - 1; index >= start + MAX_PASSAGE / 2; index--) {
+            char character = text.charAt(index);
+            if (character == '\n' || character == '。') {
+                return index + 1;
+            }
+        }
+        return Character.isHighSurrogate(text.charAt(end - 1)) ? end - 1 : end;
     }
 
     private static List<Segment> checked(List<Segment> segments) {
@@ -171,9 +165,44 @@ public class DocumentImport {
         if (segments.stream().anyMatch(segment -> segment.content().contains("\u0000"))) {
             throw WorkspaceException.badRequest("资料含有无法读取的字符。");
         }
-        if (segments.stream().mapToInt(segment -> segment.content().length()).sum() > MAX_CHARS) {
+        return segments;
+    }
+
+    private static void requireSupportedLength(long length) {
+        if (length > MAX_CHARS) {
             throw WorkspaceException.badRequest("单份资料最多导入 20 万字。");
         }
-        return segments;
+    }
+
+    private static final class PassageCollector {
+        private final List<Segment> segments = new ArrayList<>();
+        private int paragraphNumber;
+        private int length;
+
+        private void addParagraph(String text) {
+            if (!text.isBlank()) {
+                add("第 " + ++paragraphNumber + " 段", text);
+            }
+        }
+
+        private void add(String location, String content) {
+            String text = content.strip();
+            int start = 0;
+            while (start < text.length()) {
+                int end = passageEnd(text, start);
+                String passage = text.substring(start, end).stripTrailing();
+                length += passage.length();
+                requireSupportedLength(length);
+                segments.add(new Segment(location, passage));
+                start = end;
+                while (start < text.length()) {
+                    int codePoint = text.codePointAt(start);
+                    if (!Character.isWhitespace(codePoint)) {
+                        break;
+                    }
+                    start += Character.charCount(codePoint);
+                }
+            }
+        }
     }
 }

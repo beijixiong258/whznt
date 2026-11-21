@@ -26,9 +26,10 @@ const conversationId = ref(props.initial?.conversation.id ?? null)
 const draft = ref(props.initial?.draft ?? null)
 const version = ref<DraftVersion | null>(draft.value?.currentVersion ?? null)
 const content = ref(version.value?.content ?? '')
-const form = reactive<WritingInput>(version.value?.writingInput ? { ...version.value.writingInput } : {
+const defaultInput: WritingInput = {
   topic: '', angle: '', audience: '', tone: '', durationSeconds: 150, format: 'TALK', background: '',
-})
+}
+const form = reactive<WritingInput>({ ...(version.value?.writingInput ?? defaultInput) })
 const mode = ref<'edit' | 'preview'>('edit')
 const ideas = ref<TopicIdea[]>([])
 const operation = ref<'generate' | 'ideas' | 'save' | 'read' | 'rewrite'>()
@@ -52,7 +53,11 @@ const busy = computed(() => operation.value !== undefined)
 const latest = computed(() => draft.value?.currentVersion.version.id ?? null)
 const showingOld = computed(() => !!version.value && version.value.version.id !== latest.value)
 const changed = computed(() => content.value !== (version.value?.content ?? ''))
-const hasInput = computed(() => !draft.value && !!(form.topic.trim() || form.background.trim()))
+const hasUnsavedInput = computed(() => {
+  if (projectId !== null) return false
+  const saved = draft.value?.currentVersion.writingInput ?? defaultInput
+  return Object.entries(input()).some(([key, value]) => value !== saved[key as keyof WritingInput])
+})
 const hasSelection = computed(() => !!content.value.slice(selection.value.start, selection.value.end).trim())
 const versionOptions = computed(() => (draft.value?.versions ?? []).map((row, index, all) => ({
   value: row.id,
@@ -65,14 +70,18 @@ const exportHref = computed(() => {
 const rewriteLabels: Record<RewriteAction, string> = { POLISH: '润色', SHORTEN: '缩写', TONE: '换语气' }
 
 watch(busy, value => emit('busy', value))
-watch([changed, hasInput], ([edited, typed]) => emit('dirty', edited || typed))
+watch([changed, hasUnsavedInput], ([edited, typed]) => emit('dirty', edited || typed))
 
 function input(): WritingInput {
+  const duration = typeof form.durationSeconds === 'number' ? form.durationSeconds : defaultInput.durationSeconds
   return {
     ...form,
     topic: form.topic.trim(),
-    durationSeconds: form.format === 'TALK' && typeof form.durationSeconds === 'number'
-      ? form.durationSeconds : null,
+    angle: form.angle.trim(),
+    audience: form.audience.trim(),
+    tone: form.tone.trim(),
+    durationSeconds: form.format === 'TALK' ? duration : null,
+    background: form.background.trim(),
   }
 }
 

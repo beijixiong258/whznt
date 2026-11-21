@@ -38,11 +38,14 @@ async function load() {
   if (loading.value) return
   loading.value = true
   error.value = ''
+  const previousOrders = orders.value
   try {
-    [settings.value, orders.value] = await Promise.all([
+    const [nextSettings, nextOrders] = await Promise.all([
       api<RechargeSettings>('/api/recharge/settings'),
       api<RechargeOrder[]>('/api/recharge/orders'),
     ])
+    settings.value = nextSettings
+    if (orders.value === previousOrders) orders.value = nextOrders
   } catch (failure) {
     error.value = errorMessage(failure)
   } finally {

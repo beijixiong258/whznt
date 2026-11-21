@@ -8,7 +8,7 @@ import type { ModelStatus } from '../types'
 import ProjectFlow from './ProjectFlow.vue'
 import ProjectMaterials from './ProjectMaterials.vue'
 
-const props = defineProps<{ active: boolean; requestedId: number | null; model: ModelStatus }>()
+const props = defineProps<{ active: boolean; requestedProject?: { id: number }; model: ModelStatus }>()
 const emit = defineEmits<{ open: [conversationId: number, versionId?: number] }>()
 const projects = ref<PersonProject[]>([])
 const detail = ref<ProjectDetail | null>(null)
@@ -23,11 +23,12 @@ const form = reactive({ name: '', summary: '' })
 const options = computed(() => projects.value.map(row => ({ label: row.name, value: row.id })))
 const hasJobs = computed(() => detail.value?.jobs.some(running) ?? false)
 let polling: ReturnType<typeof setInterval> | undefined
+let refreshRequest: AbortController | undefined
 
 async function loadProfiles() {
   try {
     projects.value = await api<PersonProject[]>('/api/projects')
-    const initial = props.requestedId ?? activeId.value ?? projects.value[0]?.id
+    const initial = props.requestedProject?.id ?? activeId.value ?? projects.value[0]?.id
     if (initial) await open(initial)
   } catch (failure) {
     error.value = errorMessage(failure)
@@ -44,15 +45,24 @@ async function open(id: unknown) {
 
 async function refresh(quiet = false) {
   const id = activeId.value
-  if (id === null || (quiet && loading.value)) return
+  if (id === null || (quiet && refreshRequest)) return
+  refreshRequest?.abort()
+  const request = new AbortController()
+  refreshRequest = request
   if (!quiet) loading.value = true
   try {
-    const result = await api<ProjectDetail>(projectPath(id))
-    if (activeId.value === id) detail.value = result
+    const result = await api<ProjectDetail>(projectPath(id), { signal: request.signal })
+    if (refreshRequest === request) {
+      detail.value = result
+      error.value = ''
+    }
   } catch (failure) {
-    if (!quiet && activeId.value === id) error.value = errorMessage(failure)
+    if (!quiet && refreshRequest === request) error.value = errorMessage(failure)
   } finally {
-    if (activeId.value === id) loading.value = false
+    if (refreshRequest === request) {
+      refreshRequest = undefined
+      loading.value = false
+    }
   }
 }
 
@@ -92,14 +102,21 @@ async function saveProfile() {
   }
 }
 
-watch(() => props.requestedId, id => { if (id !== null) void open(id) })
-watch(() => props.active, active => { if (active && activeId.value !== null) void refresh(true) })
+watch([() => props.active, () => props.requestedProject], ([active, request], [, previousRequest]) => {
+  if (!active) return
+  if (request && request !== previousRequest) void open(request.id)
+  else if (activeId.value !== null) void refresh()
+})
 watch([() => props.active, hasJobs], ([active, jobs]) => {
   clearInterval(polling)
   if (active && jobs) polling = setInterval(() => void refresh(true), 1300)
 })
 onMounted(() => void loadProfiles())
-onBeforeUnmount(() => clearInterval(polling))
+onBeforeUnmount(() => {
+  clearInterval(polling)
+  refreshRequest?.abort()
+  refreshRequest = undefined
+})
 </script>
 
 <template>
