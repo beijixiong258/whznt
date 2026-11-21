@@ -1,6 +1,5 @@
 package com.whznt.dto;
 
-import cn.hutool.core.util.StrUtil;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -35,6 +34,14 @@ public record WritingInput(
     }
 
     private static String clean(String value) {
-        return StrUtil.blankToDefault(value, "").strip();
+        return value == null || value.chars().allMatch(WritingInput::isBlankCharacter) ? "" : value.strip();
+    }
+
+    private static boolean isBlankCharacter(int character) {
+        // Pasted text can contain invisible characters outside Java's whitespace categories.
+        return switch (character) {
+            case 0, 0x180E, 0x200C, 0x202A, 0x2800, 0x3164, 0xFEFF -> true;
+            default -> Character.isWhitespace(character) || Character.isSpaceChar(character);
+        };
     }
 }

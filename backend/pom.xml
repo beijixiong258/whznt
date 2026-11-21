@@ -16,7 +16,6 @@
         <java.version>17</java.version>
         <spring-ai.version>1.1.8</spring-ai.version>
         <mybatis-plus.version>3.5.18</mybatis-plus.version>
-        <hutool.version>5.8.38</hutool.version>
         <langgraph4j.version>1.9.9</langgraph4j.version>
         <poi.version>5.5.1</poi.version>
         <pdfbox.version>3.0.7</pdfbox.version>
@@ -90,11 +89,6 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>cn.hutool</groupId>
-            <artifactId>hutool-core</artifactId>
-            <version>${hutool.version}</version>
         </dependency>
     </dependencies>
     <build>

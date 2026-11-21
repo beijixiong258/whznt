@@ -18,7 +18,7 @@
 
 - `frontend/` 使用 Vue 3、TypeScript、Vite 和腾讯 TDesign Vue Next。表单、上传、列表、反馈优先用现成组件，桌面和手机共用一套页面。
 - `backend/` 使用 Spring Boot 单体，启动类放在 `com.whznt`。入口、业务和数据访问按 `controller → service → mapper` 分层。请求、返回、实体分别放 `dto`、`vo`、`entity`。配置和异常放 `config`、`exception`。图编排、外部接入和持久任务分别放 `workflow`、`integration`、`job`，随实际代码建包。
-- MyBatis-Plus 的实体服务保留 `IService<T>` 和 `service.impl` 下的 `ServiceImpl<M, T>`，Mapper 继承 `BaseMapper<T>`。同一实体的操作尽量归入同一 Service。用 Lombok 做构造器注入和日志，通用工具优先复用 Hutool。
+- MyBatis-Plus 的实体服务保留 `IService<T>` 和 `service.impl` 下的 `ServiceImpl<M, T>`，Mapper 继承 `BaseMapper<T>`。同一实体的操作尽量归入同一 Service。用 Lombok 做构造器注入和日志，通用操作优先使用标准库。
 - 文本模型统一由 Spring AI 调用 DeepSeek 官方 API，默认使用 `deepseek-flash`。API Key 写在 `backend/src/main/resources/application.yaml` 的 `spring.ai.openai.api-key`，配置随 Spring Boot 应用打包。
 - 有依赖的步骤用 LangGraph4j，检查点复用 `langgraph4j-postgres-saver`。业务数据用 PostgreSQL，表结构由 Flyway 管理。QMD 用自己的 SQLite 索引，通过 Spring AI MCP 客户端连接。本地语音识别和对齐可独立选型，字幕合成用 FFmpeg。
 - `frontend/Dockerfile` 和 `backend/Dockerfile` 分别构建 `whznt-frontend` 和 `whznt-backend`。根目录 `compose.yaml` 负责服务编排，PostgreSQL 使用官方镜像 `postgres:16-alpine`。Nginx 同源转发 `/api`，QMD 与字幕工具随后端镜像打包，业务文件和数据库数据放持久卷。
@@ -29,4 +29,11 @@ Windows 命令用 PowerShell 7。先读相关源码和已有包，优先复用�
 
 开发阶段按当前数据模型和账号规则实现。旧的本地开发数据可按用户指定范围直接重置，兼容分支一并移除。项目从空库启动时由 Flyway 初始化。
 
-Java 源码按本次明确要求修改。运行 Maven 或 Java、编译、启动、清理 `target`，以及修改 `pom.xml`、`.idea` 或其他项目配置，均按用户针对本次任务的明确授权执行。测试按本次获准范围运行，交付时写明实际验证结果。提交和推送按用户明确要求进行。
+Java 源码按本次明确要求修改。运行 Maven 或 Java、编译、启动、清理 `target`，以及修改 `pom.xml`、`.idea` 或其他项目配置，均按用户针对本次任务的明确授权执行。提交和推送按用户明确要求进行。
+
+## 测试与清理
+
+1. 按本次获准范围测试，从实际受影响的页面或接口验证。账号规则覆盖合法输入、长度边界和拒绝路径，页面改动检查桌面与窄屏，数据库改动验证 Flyway 迁移。需整站联调时，在项目根目录运行 `docker compose up -d --build --wait`，确认服务就绪后再测。前端端口冲突时，用当前终端的 `WHZNT_WEB_PORT` 临时指定空闲端口。
+2. 测试账号、稿件和上传文件使用临时素材并记录 ID。临时脚本、截图、日志和构建检查产物放在工作区外的临时目录。
+3. 验收结束后按记录清理本轮测试数据和文件并复查。先运行 `docker compose stop --timeout 30 frontend backend`，再运行 `docker compose stop --timeout 30 database`。用 `docker compose ps --all` 确认服务已停止。临时产物移入 `C:\Users\user\Desktop\智能体回收站\垃圾桶`。
+4. 提交前核对暂存范围并运行 `git diff --cached --check`，按任务提交源码、依赖清单、锁文件和正式文档。交付时写明实际验证和清理结果。
