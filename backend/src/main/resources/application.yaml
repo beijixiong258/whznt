@@ -16,13 +16,26 @@ spring:
   mvc:
     async:
       request-timeout: 185s
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 516MB
+  task:
+    scheduling:
+      pool:
+        size: 2
   ai:
     openai:
-      base-url: ""
-      api-key: ""
+      base-url: https://api.deepseek.com
+      api-key: "sk-5f061568a70d405cbd7b10fd40a92228"
       chat:
         options:
-          model: ""
+          model: deepseek-flash
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
+whznt:
+  storage-dir: "${LOCALAPPDATA:${user.home}}/whznt/data"
+  qmd:
+    cli: ""
+    node: node

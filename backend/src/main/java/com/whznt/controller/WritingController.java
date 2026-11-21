@@ -3,7 +3,7 @@ package com.whznt.controller;
 import com.whznt.dto.WorkspaceRequests;
 import com.whznt.dto.WritingInput;
 import com.whznt.service.WritingService;
-import com.whznt.service.impl.AccountServiceImpl.Principal;
+import com.whznt.config.AccountPrincipal;
 import com.whznt.vo.WorkspaceViews;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,14 +35,14 @@ public class WritingController {
     }
 
     @PostMapping("/rewrite")
-    public WorkspaceViews.RewriteResult rewrite(@AuthenticationPrincipal Principal principal,
+    public WorkspaceViews.RewriteResult rewrite(@AuthenticationPrincipal AccountPrincipal principal,
                                                  @Valid @RequestBody WorkspaceRequests.Rewrite request) {
         return writing.rewrite(principal.accountId(), request);
     }
 
     @PostMapping(value = "/generate", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<WorkspaceViews.GenerationEvent>> generate(
-            @AuthenticationPrincipal Principal principal, @Valid @RequestBody WorkspaceRequests.Generate request) {
+            @AuthenticationPrincipal AccountPrincipal principal, @Valid @RequestBody WorkspaceRequests.Generate request) {
         return writing.generate(principal.accountId(), request);
     }
 }

@@ -10,7 +10,7 @@ import java.util.List;
 public interface ConversationMapper extends BaseMapper<Conversation> {
 
     @Select("""
-            SELECT id, owner_id, kind, title, updated_at
+            SELECT id, owner_id, project_id, kind, title, updated_at
             FROM conversation
             WHERE owner_id = #{ownerId}
               AND strpos(lower(title), lower(#{query})) > 0
@@ -24,7 +24,7 @@ public interface ConversationMapper extends BaseMapper<Conversation> {
             @Param("offset") long offset);
 
     @Select("""
-            SELECT id, owner_id, kind, title, updated_at
+            SELECT id, owner_id, project_id, kind, title, updated_at
             FROM conversation WHERE id = #{id} AND owner_id = #{ownerId}
             FOR UPDATE
             """)

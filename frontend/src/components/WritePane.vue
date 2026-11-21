@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { api, ApiError, errorMessage, jsonBody, loadConversation, streamGeneration, StreamInterrupted } from '../api'
 import type {
@@ -7,10 +7,18 @@ import type {
   RewriteAction, TopicIdea, WritingInput,
 } from '../types'
 import MarkdownView from './MarkdownView.vue'
+import ProjectSources from './ProjectSources.vue'
 
-const props = defineProps<{ initial: ConversationDetail | null; model: ModelStatus }>()
-const emit = defineEmits<{ saved: []; dirty: [value: boolean]; busy: [value: boolean] }>()
+const props = defineProps<{ initial: ConversationDetail | null; initialVersion?: number; model: ModelStatus }>()
+const emit = defineEmits<{
+  saved: []; dirty: [value: boolean]; busy: [value: boolean]
+  project: [id: number]; upstream: [id: number, version: number]
+  subtitle: [reference: { draftId: number; versionId: number; title: string }]
+}>()
 
+const projectId = props.initial?.conversation.projectId ?? null
+const sources = ref<InstanceType<typeof ProjectSources>>()
+const citationIds = ref<number[]>([])
 const conversationId = ref(props.initial?.conversation.id ?? null)
 const draft = ref(props.initial?.draft ?? null)
 const version = ref<DraftVersion | null>(draft.value?.currentVersion ?? null)
@@ -78,7 +86,7 @@ function setDraft(next: Manuscript | null) {
 }
 
 async function generate(kind: 'WRITE' | 'REGENERATE' = 'WRITE') {
-  if (busy.value || !props.model.available || showingOld.value) return
+  if (projectId !== null || busy.value || !props.model.available || showingOld.value) return
   if (changed.value) {
     error.value = '先保存当前编辑，再生成新版本。'
     return
@@ -259,19 +267,26 @@ async function copy() {
   }
 }
 
+onMounted(() => {
+  if (props.initialVersion !== undefined) {
+    mode.value = 'preview'
+    void selectVersion(props.initialVersion)
+  }
+})
 onBeforeUnmount(() => abort?.abort())
 </script>
 
 <template>
   <section class="write-pane">
     <div class="page-heading">
-      <h1>写稿</h1>
-      <p>输入一个主题，或让助手替你选题。也可以直接在稿件区动笔。</p>
+      <h1>{{ projectId === null ? '写稿' : initial?.conversation.title }}</h1>
+      <p v-if="projectId === null">输入一个主题，或让助手替你选题。也可以直接在稿件区动笔。</p>
+      <t-button v-else variant="text" size="small" @click="emit('project', projectId)">返回人物项目</t-button>
     </div>
     <t-alert v-if="!model.available" theme="info" :message="model.message ?? '模型尚未就绪。'" />
     <t-alert v-if="error" theme="warning" :message="error" close @close="error = ''" />
-    <div class="writing-grid">
-      <div class="setup-column">
+    <div class="writing-grid" :class="{ 'project-writing': projectId !== null }">
+      <div v-if="projectId === null" class="setup-column">
         <section class="work-card setup-card">
           <h2>稿件设置</h2>
           <div class="format-switch" role="group" aria-label="稿件文体">
@@ -355,7 +370,8 @@ onBeforeUnmount(() => abort?.abort())
             maxlength="30000" :readonly="showingOld || busy" @select="readSelection" @input="readSelection"
             @keyup="readSelection" @mouseup="readSelection"></textarea>
           <div v-else class="document-preview">
-            <MarkdownView v-if="content.trim()" :content="content" />
+            <MarkdownView v-if="content.trim()" :content="content" :citation-ids="citationIds"
+              @citation="sources?.openCitation($event)" />
             <p v-else class="secondary-text">稿件还没有内容。</p>
           </div>
         </template>
@@ -369,13 +385,20 @@ onBeforeUnmount(() => abort?.abort())
           <template v-else>
             <t-button v-if="!showingOld" :loading="operation === 'save'"
               :disabled="busy || !changed || !content.trim()" @click="save">保存版本</t-button>
-            <t-button v-if="!showingOld && version?.writingInput" variant="outline"
+            <t-button v-if="projectId === null && !showingOld && version?.writingInput" variant="outline"
               :disabled="busy || !model.available" @click="generate('REGENERATE')">重新生成</t-button>
             <t-button variant="text" theme="default" :disabled="!content.trim() || busy" @click="copy">复制</t-button>
             <a v-if="exportHref" class="export-link" :href="exportHref" title="导出所选的已保存版本">导出 Markdown</a>
+            <t-button v-if="draft && version" variant="outline" size="small" :disabled="busy"
+              @click="emit('subtitle', { draftId: draft.id, versionId: version.version.id, title: version.version.title })">
+              给这版稿配字幕
+            </t-button>
           </template>
         </div>
       </section>
+      <ProjectSources v-if="projectId !== null && version" ref="sources" :project-id="projectId"
+        :version-id="version.version.id" @loaded="citationIds = $event"
+        @open="(id, number) => emit('upstream', id, number)" />
     </div>
     <t-dialog :visible="rewrite !== null" :header="rewrite ? rewriteLabels[rewrite.action] + '选段' : '改写选段'"
       :confirm-btn="{ content: '应用到选区', disabled: rewrite?.result == null || busy }"

@@ -7,7 +7,7 @@ import com.whznt.dto.WritingInput;
 import com.whznt.entity.Draft;
 import com.whznt.entity.GenerationRun;
 import com.whznt.exception.WorkspaceException;
-import com.whznt.integration.SiliconFlow;
+import com.whznt.integration.DeepSeekModel;
 import com.whznt.vo.WorkspaceViews;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +38,7 @@ public class WritingService {
             "(?ms)^##[ \\t]*开头[ \\t]*\\R\\s*\\S.*?^##[ \\t]*正文[ \\t]*\\R\\s*\\S.*?^##[ \\t]*收尾[ \\t]*\\R\\s*\\S");
     private static final String FENCE = "\u0060\u0060\u0060";
 
-    private final SiliconFlow model;
+    private final DeepSeekModel model;
     private final PromptCatalog prompts;
     private final GenerationRunService runs;
     private final DraftService drafts;
@@ -61,10 +61,9 @@ public class WritingService {
             boolean chat = run.getKind() == GenerationRun.Kind.CHAT;
             List<Message> messages = chat
                     ? prompts.chat(work.history(), work.message()) : prompts.write(work.writingInput());
-            int tokenBudget = 4096;
-            if (!chat && work.writingInput().format() == WritingInput.Format.TALK) {
-                tokenBudget = Math.max(2048, work.writingInput().durationSeconds() * 7);
-            }
+            ScriptBudget budget = !chat && work.writingInput().format() == WritingInput.Format.TALK
+                    ? ScriptBudget.forSeconds(work.writingInput().durationSeconds()) : null;
+            int tokenBudget = budget == null ? 4096 : budget.tokenLimit();
             StringBuilder text = new StringBuilder();
             Flux<ServerSentEvent<WorkspaceViews.GenerationEvent>> deltas = model.stream(messages, tokenBudget, 0.65)
                     .map(token -> {
@@ -75,6 +74,16 @@ public class WritingService {
                 String answer = usableContent(text.toString());
                 if (!chat) {
                     answer = validateDraft(answer, work.writingInput().format());
+                }
+                if (budget != null) {
+                    int words = ScriptBudget.countWords(answer);
+                    if (!budget.contains(words)) {
+                        answer = validateDraft(collect(budget.revision(messages, answer, words), tokenBudget, 0.55),
+                                WritingInput.Format.TALK);
+                        if (!budget.contains(ScriptBudget.countWords(answer))) {
+                            throw WorkspaceException.unavailable("生成稿未达到所选时长，请重试或调整时长。");
+                        }
+                    }
                 }
                 return event("done", runs.complete(work, answer, model.model()));
             }).subscribeOn(Schedulers.boundedElastic());

@@ -33,8 +33,18 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
 
     @Override
     public Conversation create(long ownerId, Conversation.Kind kind, String title) {
+        return create(ownerId, kind, title, null);
+    }
+
+    @Override
+    public Conversation createForProject(long ownerId, long projectId, String title) {
+        return create(ownerId, Conversation.Kind.WRITING, title, projectId);
+    }
+
+    private Conversation create(long ownerId, Conversation.Kind kind, String title, Long projectId) {
         Conversation row = new Conversation();
         row.setOwnerId(ownerId);
+        row.setProjectId(projectId);
         row.setKind(kind);
         row.setTitle(title == null || title.isBlank() ? UNNAMED : shortTitle(title));
         row.setUpdatedAt(OffsetDateTime.now());

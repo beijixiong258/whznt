@@ -18,10 +18,10 @@ import java.util.Map;
 import java.util.Set;
 
 @Component
-public class SiliconFlow {
+public class DeepSeekModel {
 
-    private static final String BASE_URL = "https://api.siliconflow.cn";
-    private static final String DEFAULT_MODEL = "deepseek-ai/DeepSeek-V4-Flash";
+    private static final String BASE_URL = "https://api.deepseek.com";
+    private static final String DEFAULT_MODEL = "deepseek-flash";
     private static final Set<String> BASE_URLS = Set.of(BASE_URL, BASE_URL + "/", BASE_URL + "/v1",
             BASE_URL + "/v1/");
 
@@ -29,7 +29,7 @@ public class SiliconFlow {
     private final String model;
     private final String unavailableReason;
 
-    public SiliconFlow(
+    public DeepSeekModel(
             @Value("${spring.ai.openai.base-url:}") String baseUrl,
             @Value("${spring.ai.openai.api-key:}") String apiKey,
             @Value("${spring.ai.openai.chat.options.model:}") String model) {
@@ -40,7 +40,7 @@ public class SiliconFlow {
         } else if ((!baseUrl.isBlank() && !BASE_URLS.contains(baseUrl.strip()))
                 || !supportedModel(this.model)) {
             this.client = null;
-            this.unavailableReason = "模型配置有误，请检查硅基流动地址和模型名称。";
+            this.unavailableReason = "模型配置有误，请检查 DeepSeek 官方地址和型号。";
         } else {
             OpenAiApi api = OpenAiApi.builder().baseUrl(BASE_URL).apiKey(apiKey.strip()).build();
             this.client = OpenAiChatModel.builder().openAiApi(api).build();
@@ -68,7 +68,7 @@ public class SiliconFlow {
                 .model(model)
                 .maxTokens(maxTokens)
                 .temperature(temperature)
-                .extraBody(Map.of("enable_thinking", false))
+                .extraBody(Map.of("thinking", Map.of("type", "disabled")))
                 .build();
         return Flux.defer(() -> client.stream(new Prompt(messages, options)))
                 .<String>handle((response, sink) -> {
@@ -90,6 +90,6 @@ public class SiliconFlow {
     }
 
     private static boolean supportedModel(String value) {
-        return value.toLowerCase(Locale.ROOT).matches("(?:pro/)?(?:deepseek-ai/deepseek[^/]+|qwen/qwen[^/]+)");
+        return value.toLowerCase(Locale.ROOT).equals(DEFAULT_MODEL);
     }
 }

@@ -1,0 +1,7 @@
+{
+  "name": "whznt-qmd",
+  "private": true,
+  "dependencies": {
+    "@tobilu/qmd": "2.9.0"
+  }
+}

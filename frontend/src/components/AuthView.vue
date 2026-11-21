@@ -52,7 +52,7 @@ async function submit() {
 <template>
   <main class="auth-layout">
     <aside class="auth-side">
-      <div class="brand-lockup"><span class="brand-mark" aria-hidden="true">稿</span> 创作工作台</div>
+      <div class="brand-lockup"><img class="brand-mark" src="/brand.png" alt="" width="44" height="44">创作工作台</div>
       <div>
         <h1>把想法<br>写成能用的稿。</h1>
         <p>从一个主题开始，或直接生成。随时找回改过的版本。</p>
@@ -60,18 +60,20 @@ async function submit() {
     </aside>
     <section class="auth-card">
       <h2>{{ register ? '创建个人账号' : '登录工作台' }}</h2>
-      <form class="auth-form" @submit.prevent="submit">
-        <label for="phone">手机号</label>
-        <t-input id="phone" v-model="phone" type="tel" autocomplete="tel" placeholder="11 位手机号"
-          :maxlength="11" size="large" />
-        <label for="password">密码</label>
-        <t-input id="password" v-model="password" type="password" size="large" placeholder="至少 8 个字符"
-          :autocomplete="register ? 'new-password' : 'current-password'" />
+      <t-form class="auth-form" :data="{ phone, password }" label-align="top" @submit="submit">
+        <t-form-item label="手机号" name="phone" for="phone">
+          <t-input v-field-id="'phone'" v-model="phone" name="phone" type="tel" autocomplete="tel" placeholder="11 位手机号"
+            :maxlength="11" size="large" />
+        </t-form-item>
+        <t-form-item label="密码" name="password" for="password">
+          <t-input v-field-id="'password'" v-model="password" name="password" type="password" size="large" placeholder="至少 8 个字符"
+            :autocomplete="register ? 'new-password' : 'current-password'" />
+        </t-form-item>
         <t-alert v-if="error" theme="error" :message="error" />
         <t-button block size="large" type="submit" :loading="pending">
           {{ register ? '注册并进入工作台' : '登录' }}
         </t-button>
-      </form>
+      </t-form>
       <t-button variant="text" theme="primary" :disabled="pending" class="auth-switch" @click="switchMode">
         {{ register ? '已有账号，去登录' : '创建账号' }}
       </t-button>

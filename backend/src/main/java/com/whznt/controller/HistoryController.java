@@ -5,7 +5,7 @@ import com.whznt.entity.Conversation;
 import com.whznt.service.ChatMessageService;
 import com.whznt.service.ConversationService;
 import com.whznt.service.DraftService;
-import com.whznt.service.impl.AccountServiceImpl.Principal;
+import com.whznt.config.AccountPrincipal;
 import com.whznt.vo.WorkspaceViews;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -32,14 +32,14 @@ public class HistoryController {
     private final DraftService drafts;
 
     @GetMapping
-    public WorkspaceViews.History history(@AuthenticationPrincipal Principal principal,
+    public WorkspaceViews.History history(@AuthenticationPrincipal AccountPrincipal principal,
                                           @RequestParam(defaultValue = "") @Size(max = 120) String q,
                                           @RequestParam(defaultValue = "1") @Min(1) int page) {
         return conversations.history(principal.accountId(), q, page);
     }
 
     @GetMapping("/{id}")
-    public WorkspaceViews.ConversationDetail detail(@AuthenticationPrincipal Principal principal,
+    public WorkspaceViews.ConversationDetail detail(@AuthenticationPrincipal AccountPrincipal principal,
                                                      @PathVariable long id) {
         Conversation conversation = conversations.requireOwned(principal.accountId(), id);
         if (conversation.getKind() == Conversation.Kind.WRITING) {
@@ -52,7 +52,7 @@ public class HistoryController {
     }
 
     @PatchMapping("/{id}")
-    public WorkspaceViews.ConversationRow rename(@AuthenticationPrincipal Principal principal, @PathVariable long id,
+    public WorkspaceViews.ConversationRow rename(@AuthenticationPrincipal AccountPrincipal principal, @PathVariable long id,
                                                   @Valid @RequestBody WorkspaceRequests.Rename request) {
         return conversations.rename(principal.accountId(), id, request.title());
     }

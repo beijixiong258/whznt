@@ -14,6 +14,7 @@ public class Conversation {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long ownerId;
+    private Long projectId;
     private Kind kind;
     private String title;
     private OffsetDateTime updatedAt;

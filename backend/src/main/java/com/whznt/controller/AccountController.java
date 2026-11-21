@@ -2,7 +2,7 @@ package com.whznt.controller;
 
 import com.whznt.dto.WorkspaceRequests;
 import com.whznt.service.AccountService;
-import com.whznt.service.impl.AccountServiceImpl.Principal;
+import com.whznt.config.AccountPrincipal;
 import com.whznt.vo.WorkspaceViews;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +35,7 @@ public class AccountController {
     }
 
     @GetMapping("/me")
-    public WorkspaceViews.Account me(@AuthenticationPrincipal Principal principal) {
+    public WorkspaceViews.Account me(@AuthenticationPrincipal AccountPrincipal principal) {
         return new WorkspaceViews.Account(principal.accountId(), principal.getUsername());
     }
 }

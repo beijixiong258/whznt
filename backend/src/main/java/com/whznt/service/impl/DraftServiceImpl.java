@@ -8,6 +8,7 @@ import com.whznt.entity.Draft;
 import com.whznt.entity.DraftVersion;
 import com.whznt.exception.WorkspaceException;
 import com.whznt.mapper.DraftMapper;
+import com.whznt.mapper.ProjectVersionContextMapper;
 import com.whznt.service.ConversationService;
 import com.whznt.service.DraftService;
 import com.whznt.service.DraftVersionService;
@@ -24,6 +25,7 @@ public class DraftServiceImpl extends ServiceImpl<DraftMapper, Draft> implements
 
     private final ConversationService conversations;
     private final DraftVersionService versions;
+    private final ProjectVersionContextMapper projectContexts;
 
     @Override
     public Draft requireOwned(long ownerId, long draftId) {
@@ -37,6 +39,13 @@ public class DraftServiceImpl extends ServiceImpl<DraftMapper, Draft> implements
 
     private Draft forConversation(long conversationId) {
         return lambdaQuery().eq(Draft::getConversationId, conversationId).one();
+    }
+
+    @Override
+    public DraftVersion currentVersion(long conversationId) {
+        Draft draft = forConversation(conversationId);
+        return draft == null || draft.getCurrentVersionId() == null
+                ? null : versions.requireForDraft(draft.getId(), draft.getCurrentVersionId());
     }
 
     @Override
@@ -74,7 +83,11 @@ public class DraftServiceImpl extends ServiceImpl<DraftMapper, Draft> implements
         DraftVersion base = requireCurrent(conversation.getId(), request.baseVersionId());
         WritingInput input = base == null ? null : versions.originalInput(base);
         String model = base == null ? null : base.getModel();
-        saveVersion(conversation, request.baseVersionId(), request.content(), DraftVersion.Source.EDITED, input, model);
+        DraftVersion saved = saveVersion(conversation, request.baseVersionId(), request.content(),
+                DraftVersion.Source.EDITED, input, model);
+        if (base != null && conversation.getProjectId() != null) {
+            projectContexts.copy(base.getId(), saved.getId());
+        }
         return viewForConversation(conversation.getId());
     }
 
@@ -83,6 +96,13 @@ public class DraftServiceImpl extends ServiceImpl<DraftMapper, Draft> implements
                                       WritingInput input, String model) {
         requireCurrent(conversation.getId(), baseVersionId);
         return saveVersion(conversation, baseVersionId, content, DraftVersion.Source.GENERATED, input, model);
+    }
+
+    @Override
+    public DraftVersion saveProjectVersion(Conversation conversation, Long baseVersionId, String content,
+                                           DraftVersion.Source source, String model) {
+        requireCurrent(conversation.getId(), baseVersionId);
+        return saveVersion(conversation, baseVersionId, content, source, null, model);
     }
 
     @Override

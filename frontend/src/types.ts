@@ -34,6 +34,7 @@ export interface ConversationRow {
   kind: ConversationKind
   title: string
   updatedAt: string
+  projectId: number | null
 }
 
 export interface VersionRow {

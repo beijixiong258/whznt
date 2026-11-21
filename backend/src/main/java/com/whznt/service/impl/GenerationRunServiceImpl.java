@@ -68,6 +68,9 @@ public class GenerationRunServiceImpl extends ServiceImpl<GenerationRunMapper, G
         if (conversation.getKind() != kind) {
             throw WorkspaceException.badRequest("请在对应的写稿或对话入口操作。");
         }
+        if (conversation.getProjectId() != null) {
+            throw WorkspaceException.badRequest("请从人物项目重新生成这个成果。");
+        }
 
         long conversationId = conversation.getId();
         baseMapper.expireAbandoned(conversationId);

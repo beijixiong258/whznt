@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -80,17 +81,21 @@ public class PromptCatalog {
 
     private static Map<String, ?> writingParameters(WritingInput input) {
         boolean article = input.format() == WritingInput.Format.ARTICLE;
-        return Map.of(
+        Map<String, Object> parameters = new LinkedHashMap<>(Map.of(
                 "主题", input.topic(),
                 "切入角度", input.angle(),
                 "受众", input.audience(),
                 "语气", input.tone(),
                 "文体", article ? "图文稿" : "短视频口播稿",
                 "时长（秒）", article ? "" : input.durationSeconds(),
-                "参考资料", input.background());
+                "参考资料", input.background()));
+        if (!article) {
+            parameters.put("口播规格", ScriptBudget.forSeconds(input.durationSeconds()).promptFields());
+        }
+        return parameters;
     }
 
-    private static String read(String name) {
+    static String read(String name) {
         try {
             return new ClassPathResource("prompts/" + name + ".md").getContentAsString(StandardCharsets.UTF_8).strip();
         } catch (IOException exception) {

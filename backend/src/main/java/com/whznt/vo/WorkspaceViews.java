@@ -22,9 +22,9 @@ public final class WorkspaceViews {
     public record History(List<ConversationRow> items, boolean hasMore) {
     }
 
-    public record ConversationRow(long id, Conversation.Kind kind, String title, OffsetDateTime updatedAt) {
+    public record ConversationRow(long id, Conversation.Kind kind, String title, OffsetDateTime updatedAt, Long projectId) {
         public static ConversationRow from(Conversation row) {
-            return new ConversationRow(row.getId(), row.getKind(), row.getTitle(), row.getUpdatedAt());
+            return new ConversationRow(row.getId(), row.getKind(), row.getTitle(), row.getUpdatedAt(), row.getProjectId());
         }
     }
 

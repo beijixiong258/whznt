@@ -2,7 +2,7 @@ package com.whznt.controller;
 
 import com.whznt.dto.WorkspaceRequests;
 import com.whznt.service.DraftService;
-import com.whznt.service.impl.AccountServiceImpl.Principal;
+import com.whznt.config.AccountPrincipal;
 import com.whznt.vo.WorkspaceViews;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,20 +29,20 @@ public class DraftController {
     private final DraftService drafts;
 
     @PostMapping
-    public WorkspaceViews.Manuscript save(@AuthenticationPrincipal Principal principal,
+    public WorkspaceViews.Manuscript save(@AuthenticationPrincipal AccountPrincipal principal,
                                           @RequestParam(required = false) Long conversationId,
                                           @Valid @RequestBody WorkspaceRequests.SaveDraft request) {
         return drafts.saveManual(principal.accountId(), conversationId, request);
     }
 
     @GetMapping("/{draftId}/versions/{versionId}")
-    public WorkspaceViews.Version version(@AuthenticationPrincipal Principal principal,
+    public WorkspaceViews.Version version(@AuthenticationPrincipal AccountPrincipal principal,
                                           @PathVariable long draftId, @PathVariable long versionId) {
         return drafts.readVersion(principal.accountId(), draftId, versionId);
     }
 
     @GetMapping("/{draftId}/versions/{versionId}/export")
-    public ResponseEntity<String> export(@AuthenticationPrincipal Principal principal,
+    public ResponseEntity<String> export(@AuthenticationPrincipal AccountPrincipal principal,
                                          @PathVariable long draftId, @PathVariable long versionId) {
         WorkspaceViews.Version version = drafts.readVersion(principal.accountId(), draftId, versionId);
         String filename = version.version().title().replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_");

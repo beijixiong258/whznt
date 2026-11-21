@@ -1,0 +1,5 @@
+target
+qmd/node_modules
+subtitle/__pycache__
+.git
+*.log

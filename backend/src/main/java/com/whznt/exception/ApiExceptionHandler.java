@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -25,6 +26,12 @@ public class ApiExceptionHandler {
         FieldError error = exception.getBindingResult().getFieldError();
         String message = error == null ? "请检查填写的内容。" : error.getDefaultMessage();
         return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(new ApiError(message));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> tooLarge() {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).contentType(MediaType.APPLICATION_JSON)
+                .body(new ApiError("上传文件超过大小上限，请减小文件后再试。"));
     }
 
     @ExceptionHandler({

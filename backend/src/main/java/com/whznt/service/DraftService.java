@@ -12,6 +12,8 @@ public interface DraftService extends IService<Draft> {
 
     Draft requireOwned(long ownerId, long draftId);
 
+    DraftVersion currentVersion(long conversationId);
+
     DraftVersion requireCurrent(long conversationId, Long expectedVersion);
 
     WorkspaceViews.Manuscript viewForConversation(long conversationId);
@@ -20,6 +22,9 @@ public interface DraftService extends IService<Draft> {
 
     DraftVersion saveGenerated(Conversation conversation, Long baseVersionId, String content,
                                WritingInput input, String model);
+
+    DraftVersion saveProjectVersion(Conversation conversation, Long baseVersionId, String content,
+                                    DraftVersion.Source source, String model);
 
     WorkspaceViews.Version readVersion(long ownerId, long draftId, long versionId);
 }

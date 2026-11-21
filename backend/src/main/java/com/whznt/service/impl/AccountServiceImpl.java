@@ -1,13 +1,13 @@
 package com.whznt.service.impl;
 
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
+import com.whznt.config.AccountPrincipal;
 import com.whznt.entity.Account;
 import com.whznt.exception.WorkspaceException;
 import com.whznt.mapper.AccountMapper;
 import com.whznt.service.AccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,21 +47,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
         if (account == null) {
             throw new UsernameNotFoundException("手机号或密码有误。");
         }
-        return new Principal(account);
-    }
-
-    public static final class Principal extends User {
-
-        private final long accountId;
-
-        private Principal(Account account) {
-            super(account.getPhone(), account.getPasswordHash(),
-                    java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER")));
-            this.accountId = account.getId();
-        }
-
-        public long accountId() {
-            return accountId;
-        }
+        return new AccountPrincipal(account.getId(), account.getPhone(), account.getPasswordHash());
     }
 }

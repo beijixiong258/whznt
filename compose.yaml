@@ -1,13 +1,42 @@
 name: whznt
 services:
+  frontend:
+    image: whznt-frontend
+    build: ./frontend
+    ports:
+      - "127.0.0.1:${WHZNT_WEB_PORT:-8090}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+  backend:
+    image: whznt-backend
+    build: ./backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/whznt
+      WHZNT_RECHARGE_QR_FILE: /run/whznt/config/recharge-qr.png
+      WHZNT_LEGACY_ORIGINALS: /run/whznt/legacy-originals
+    volumes:
+      - business-files:/var/lib/whznt
+      - "${WHZNT_CONFIG_DIR:-./config}:/run/whznt/config:ro"
+      - "${WHZNT_LEGACY_ORIGINALS:-./config}:/run/whznt/legacy-originals:ro"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/auth/csrf').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 18
+      start_period: 10s
   database:
-    image: postgres:16-alpine
+    image: whznt-database
+    build: ./database
     environment:
       POSTGRES_DB: whznt
       POSTGRES_USER: whznt
       POSTGRES_PASSWORD: "whznt-local-dev"
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${WHZNT_DB_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -17,3 +46,4 @@ services:
       retries: 12
 volumes:
   postgres-data:
+  business-files:
