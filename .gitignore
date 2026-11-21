@@ -4,6 +4,7 @@ backend/target/
 backend/qmd/node_modules/
 backend/subtitle/__pycache__/
 /config/
+/参考资料/
 .idea/
 *.iml
 *.log

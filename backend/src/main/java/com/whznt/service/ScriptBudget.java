@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 record ScriptBudget(int seconds, int target, int minimum, int maximum) {
 
     static final Pattern CITATION = Pattern.compile("【资料(\\d+)】");
-    private static final Pattern HEADING = Pattern.compile("(?m)^#{1,6}\\h+.+$");
+    private static final Pattern HEADING = Pattern.compile("(?m)^ {0,3}#{1,6}(?:\\h+.*)?$");
     private static final Pattern SPOKEN_WORD = Pattern.compile("\\p{IsHan}|[\\p{IsLatin}\\p{N}]+");
 
     static ScriptBudget forSeconds(int seconds) {
@@ -21,8 +21,11 @@ record ScriptBudget(int seconds, int target, int minimum, int maximum) {
     }
 
     static int countWords(String text) {
-        String body = CITATION.matcher(HEADING.matcher(text).replaceAll("")).replaceAll("");
-        return (int) SPOKEN_WORD.matcher(body).results().count();
+        return (int) SPOKEN_WORD.matcher(bodyText(text)).results().count();
+    }
+
+    static String bodyText(String text) {
+        return CITATION.matcher(HEADING.matcher(text).replaceAll("")).replaceAll("");
     }
 
     boolean contains(int words) {

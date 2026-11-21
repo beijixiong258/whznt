@@ -24,7 +24,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -32,10 +31,10 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class WritingService {
 
-    private static final int MAX_CONTENT = 30000;
-    private static final Pattern TITLE = Pattern.compile("^#\\s+\\S");
-    private static final Pattern TALK_SECTIONS = Pattern.compile(
-            "(?ms)^##[ \\t]*开头[ \\t]*\\R\\s*\\S.*?^##[ \\t]*正文[ \\t]*\\R\\s*\\S.*?^##[ \\t]*收尾[ \\t]*\\R\\s*\\S");
+    private static final Pattern TITLE = Pattern.compile("(?U)#[ \\t].*?[^#\\s]");
+    private static final Pattern TALK_SECTION = Pattern.compile(
+            "(?m)^ {0,3}##[ \\t]*(开头|正文|收尾)(?:[ \\t]+#+)?[ \\t]*$");
+    private static final List<String> TALK_SECTIONS = List.of("开头", "正文", "收尾");
     private static final String FENCE = "\u0060\u0060\u0060";
 
     private final DeepSeekModel model;
@@ -67,7 +66,7 @@ public class WritingService {
             StringBuilder text = new StringBuilder();
             Flux<ServerSentEvent<WorkspaceViews.GenerationEvent>> deltas = model.stream(messages, tokenBudget, 0.65)
                     .map(token -> {
-                        append(text, token);
+                        GeneratedContent.append(text, token);
                         return event("delta", WorkspaceViews.GenerationEvent.delta(token));
                     });
             Mono<ServerSentEvent<WorkspaceViews.GenerationEvent>> complete = Mono.fromCallable(() -> {
@@ -126,10 +125,9 @@ public class WritingService {
 
     private String collect(List<Message> messages, int maxTokens, double temperature) {
         try {
-            StringBuilder response = model.stream(messages, maxTokens, temperature)
-                    .reduceWith(StringBuilder::new, WritingService::append)
-                    .block(Duration.ofSeconds(90));
-            return usableContent(Objects.toString(response, ""));
+            String response = GeneratedContent.collect(model.stream(messages, maxTokens, temperature),
+                    Duration.ofSeconds(90));
+            return usableContent(response);
         } catch (WorkspaceException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -139,12 +137,34 @@ public class WritingService {
 
     private static String validateDraft(String response, WritingInput.Format format) {
         String content = stripFence(response, "markdown");
-        if (!TITLE.matcher(content).find()
-                || (format == WritingInput.Format.TALK && !TALK_SECTIONS.matcher(content).find())
-                || content.lines().skip(1).allMatch(String::isBlank)) {
+        if (!TITLE.matcher(content).lookingAt()) {
             throw new WorkspaceException(HttpStatus.BAD_GATEWAY, "模型返回的稿件缺少标题或正文，请重新生成。");
         }
+        if (format == WritingInput.Format.TALK) {
+            var sections = TALK_SECTION.matcher(content);
+            int start = -1;
+            for (String expected : TALK_SECTIONS) {
+                if (!sections.find() || !expected.equals(sections.group(1))
+                        || (start >= 0 && !hasBody(content.substring(start, sections.start())))) {
+                    throw invalidTalk();
+                }
+                start = sections.end();
+            }
+            if (sections.find() || !hasBody(content.substring(start))) {
+                throw invalidTalk();
+            }
+        } else if (!hasBody(content)) {
+            throw new WorkspaceException(HttpStatus.BAD_GATEWAY, "模型返回的图文稿缺少正文，请重新生成。");
+        }
         return content;
+    }
+
+    private static boolean hasBody(String text) {
+        return ScriptBudget.bodyText(text).codePoints().anyMatch(Character::isLetterOrDigit);
+    }
+
+    private static WorkspaceException invalidTalk() {
+        return new WorkspaceException(HttpStatus.BAD_GATEWAY, "口播稿须依次包含开头、正文和收尾，每节都要有台词。");
     }
 
     private static WorkspaceViews.TopicIdeas validateIdeas(WorkspaceViews.TopicIdeas payload) {
@@ -192,13 +212,6 @@ public class WritingService {
             }
         }
         return response;
-    }
-
-    private static StringBuilder append(StringBuilder text, String token) {
-        if (text.length() + token.length() > MAX_CONTENT) {
-            throw WorkspaceException.badRequest("生成内容太长，请缩短写作要求后重试。");
-        }
-        return text.append(token);
     }
 
     private static ServerSentEvent<WorkspaceViews.GenerationEvent> event(String name,

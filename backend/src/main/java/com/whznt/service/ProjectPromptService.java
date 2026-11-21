@@ -129,9 +129,8 @@ public class ProjectPromptService {
     }
 
     private String generate(List<Message> messages, int tokens) {
-        String answer = model.stream(messages, tokens, 0.62)
-                .collectList().map(parts -> String.join("", parts).strip()).block(Duration.ofMinutes(4));
-        if (answer == null || answer.isBlank() || answer.length() > 30000) {
+        String answer = GeneratedContent.collect(model.stream(messages, tokens, 0.62), Duration.ofMinutes(4)).strip();
+        if (answer.isEmpty()) {
             throw WorkspaceException.unavailable("模型没有返回可保存的成果，请重试。");
         }
         return answer;

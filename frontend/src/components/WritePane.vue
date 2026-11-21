@@ -37,6 +37,8 @@ const partial = ref('')
 const error = ref('')
 const editor = ref<HTMLTextAreaElement>()
 const selection = ref({ start: 0, end: 0 })
+const maxRewriteSelection = 6000
+const maxRewriteContext = 1500
 const rewrite = ref<{
   action: RewriteAction
   start: number
@@ -59,6 +61,8 @@ const hasUnsavedInput = computed(() => {
   return Object.entries(input()).some(([key, value]) => value !== saved[key as keyof WritingInput])
 })
 const hasSelection = computed(() => !!content.value.slice(selection.value.start, selection.value.end).trim())
+const selectionLength = computed(() => selection.value.end - selection.value.start)
+const selectionTooLong = computed(() => selectionLength.value > maxRewriteSelection)
 const versionOptions = computed(() => (draft.value?.versions ?? []).map((row, index, all) => ({
   value: row.id,
   label: '第 ' + (all.length - index) + ' 版 · ' + (row.source === 'GENERATED' ? '生成' : '手动保存'),
@@ -211,10 +215,16 @@ function readSelection() {
 }
 
 function startRewrite(action: RewriteAction) {
-  if (busy.value || !props.model.available || !draft.value || showingOld.value || !hasSelection.value) return
+  if (busy.value || !props.model.available || !draft.value || showingOld.value
+    || !hasSelection.value || selectionTooLong.value) return
   const { start, end } = selection.value
   rewrite.value = { action, start, end, document: content.value, tone: '', result: null, error: '' }
   if (action !== 'TONE') void requestRewrite()
+}
+
+function contextSlice(text: string, start: number, end: number) {
+  // A UTF-16 limit can cut through a supplementary character at either edge.
+  return text.slice(start, end).replace(/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/g, '')
 }
 
 async function requestRewrite() {
@@ -232,8 +242,8 @@ async function requestRewrite() {
       baseVersionId: latest.value,
       action: selected.action,
       selection: selected.document.slice(selected.start, selected.end),
-      before: selected.document.slice(Math.max(0, selected.start - 1200), selected.start),
-      after: selected.document.slice(selected.end, selected.end + 1200),
+      before: contextSlice(selected.document, Math.max(0, selected.start - maxRewriteContext), selected.start),
+      after: contextSlice(selected.document, selected.end, selected.end + maxRewriteContext),
       tone: selected.tone,
     }))
     selected.result = response.content
@@ -309,9 +319,12 @@ onBeforeUnmount(() => abort?.abort())
           <div class="field">
             <label for="topic">主题 <span>选填</span></label>
             <t-textarea v-field-id="'topic'" v-model="form.topic" placeholder="例如，第一次拍口播，怎么讲得自然一点？"
-              :autosize="{ minRows: 3, maxRows: 5 }" :maxlength="300" :disabled="busy"
-              @change="form.angle = ''" />
-            <span v-if="form.angle" class="idea-angle">{{ form.angle }}</span>
+              :autosize="{ minRows: 3, maxRows: 5 }" :maxlength="300" :disabled="busy" />
+          </div>
+          <div class="field">
+            <label for="angle">切入角度 <span>选填</span></label>
+            <t-textarea v-field-id="'angle'" v-model="form.angle" placeholder="例如，从开口的第一句话讲起"
+              :autosize="{ minRows: 1, maxRows: 4 }" :maxlength="500" :disabled="busy" />
           </div>
           <t-collapse class="writing-options" borderless>
             <t-collapse-panel header="受众、语气和参考资料">
@@ -387,9 +400,11 @@ onBeforeUnmount(() => abort?.abort())
           </div>
         </template>
         <div v-if="mode === 'edit' && hasSelection && draft && !showingOld" class="rewrite-actions">
-          <span>改写选中内容</span>
+          <span aria-live="polite">
+            {{ selectionTooLong ? `已选 ${selectionLength} 个字符，单次最多改写 ${maxRewriteSelection} 个。` : '改写选中内容' }}
+          </span>
           <t-button v-for="(label, action) in rewriteLabels" :key="action" size="small" variant="outline"
-            :disabled="busy || !model.available" @click="startRewrite(action)">{{ label }}</t-button>
+            :disabled="busy || !model.available || selectionTooLong" @click="startRewrite(action)">{{ label }}</t-button>
         </div>
         <div class="editor-footer">
           <t-button v-if="operation === 'generate'" variant="outline" @click="abort?.abort()">停止</t-button>

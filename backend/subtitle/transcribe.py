@@ -16,6 +16,10 @@ LINE_BREAK = re.compile(r"[。！？!?；;][”’）]?$")
 CITATION = re.compile(r"【资料\d+】")
 
 
+def utf16_length(text):
+    return len(text.encode("utf-16-le")) // 2
+
+
 def recognize(source, model, length_ms):
     model = WhisperModel(model, device="cpu", compute_type="int8", cpu_threads=4)
     segments, _ = model.transcribe(
@@ -31,32 +35,35 @@ def recognize(source, model, length_ms):
     for segment in segments:
         words = segment.words or ()
         if not words:
-            append_cue(cues, segment.start, segment.end, segment.text, length_ms)
+            append_cue(cues, round(segment.start * 1000), round(segment.end * 1000), segment.text, length_ms)
             continue
-        start = end = words[0].start
+        start_ms = end_ms = 0
         text = ""
         for word in words:
-            if text and (word.start - end > 0.6 or len(text + word.word) > 27 or word.end - start > 6):
-                append_cue(cues, start, end, text, length_ms)
+            word_start_ms = round(word.start * 1000)
+            word_end_ms = round(word.end * 1000)
+            if text and (word_start_ms - end_ms > 600 or utf16_length(text + word.word) > 27
+                         or word_end_ms - start_ms > 6000):
+                append_cue(cues, start_ms, end_ms, text, length_ms)
                 text = ""
             if not text:
-                start = word.start
+                start_ms = word_start_ms
             text += word.word
-            end = word.end
-            if LINE_BREAK.search(text.strip()) and end - start >= 0.7:
-                append_cue(cues, start, end, text, length_ms)
+            end_ms = word_end_ms
+            if LINE_BREAK.search(text.strip()) and end_ms - start_ms >= 700:
+                append_cue(cues, start_ms, end_ms, text, length_ms)
                 text = ""
-        append_cue(cues, start, end, text, length_ms)
+        append_cue(cues, start_ms, end_ms, text, length_ms)
     return cues
 
 
-def append_cue(cues, start, end, text, length_ms):
+def append_cue(cues, start_ms, end_ms, text, length_ms):
     text = text.strip()
     if not text:
         return
     previous_end = cues[-1]["endMs"] if cues else 0
-    first = max(previous_end, round(start * 1000))
-    last = min(length_ms, round(end * 1000))
+    first = max(previous_end, start_ms)
+    last = min(length_ms, end_ms)
     if last > first:
         cues.append({"startMs": first, "endMs": last, "text": text})
 

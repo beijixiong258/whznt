@@ -114,7 +114,6 @@ h1, h2, h3, p { margin: 0; }
 .field { margin-top: var(--td-comp-margin-l); display: grid; gap: var(--td-comp-margin-s); }
 .field label { font: var(--td-font-title-small); }
 .field label span { color: var(--muted); font-weight: 400; margin-left: var(--td-comp-margin-xs); }
-.idea-angle { color: var(--brand); font: var(--td-font-body-medium); overflow-wrap: anywhere; }
 .writing-options { margin: var(--td-comp-margin-l) 0 var(--td-comp-margin-xl); }
 .setup-actions { display: grid; gap: 9px; }
 .idea-row { padding: 15px 0; border-top: 1px solid var(--line); }
