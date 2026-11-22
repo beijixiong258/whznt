@@ -22,12 +22,12 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
 
     @Override
     public Conversation requireOwned(long ownerId, long id) {
-        return requireAccessible(baseMapper.findOwned(id, ownerId));
+        return requireRow(baseMapper.findOwned(id, ownerId));
     }
 
     @Override
     public Conversation lockOwned(long ownerId, long id) {
-        return requireAccessible(baseMapper.lockOwned(id, ownerId));
+        return requireRow(baseMapper.lockOwned(id, ownerId));
     }
 
     @Override
@@ -63,9 +63,6 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
     @Transactional
     public WorkspaceViews.ConversationRow rename(long ownerId, long id, String title) {
         Conversation row = lockOwned(ownerId, id);
-        if (row.getDeletedAt() != null) {
-            throw WorkspaceException.notFound("找不到这条会话。");
-        }
         row.setTitle(shortTitle(title));
         row.setUpdatedAt(OffsetDateTime.now());
         updateById(row);
@@ -74,12 +71,8 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
 
     @Override
     @Transactional
-    public void removeFromHistory(long ownerId, long id) {
-        Conversation row = requireRow(baseMapper.lockOwned(id, ownerId));
-        if (row.getDeletedAt() == null) {
-            row.setDeletedAt(OffsetDateTime.now());
-            updateById(row);
-        }
+    public void deleteConversation(long ownerId, long id) {
+        removeById(lockOwned(ownerId, id).getId());
     }
 
     @Override
@@ -102,13 +95,5 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
             throw WorkspaceException.notFound("找不到这条会话。");
         }
         return row;
-    }
-
-    private static Conversation requireAccessible(Conversation row) {
-        Conversation conversation = requireRow(row);
-        if (conversation.getDeletedAt() != null && conversation.getProjectId() == null) {
-            throw WorkspaceException.notFound("找不到这条会话。");
-        }
-        return conversation;
     }
 }

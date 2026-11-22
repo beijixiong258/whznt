@@ -6,6 +6,7 @@ import com.whznt.entity.RechargeOrder;
 import com.whznt.integration.PaymentImages.ImageView;
 import com.whznt.vo.AdminViews;
 import com.whznt.vo.RechargeViews;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -14,6 +15,8 @@ public interface RechargeService extends IService<RechargeOrder> {
     RechargeViews.Settings settings(long ownerId);
 
     ImageView qrImage();
+
+    void saveQr(MultipartFile file);
 
     List<RechargeViews.Order> orders(long ownerId);
 

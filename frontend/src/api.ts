@@ -25,6 +25,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>
 }
 
+export async function loadImage(path: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await request(path, { signal }, 'image/png, image/jpeg, application/json')
+  return response.blob()
+}
+
 export function jsonBody(body: unknown, method = 'POST'): RequestInit {
   return {
     method,

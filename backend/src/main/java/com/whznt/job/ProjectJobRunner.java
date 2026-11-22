@@ -54,6 +54,8 @@ public class ProjectJobRunner {
         } catch (Exception exception) {
             log.warn("Project generation {} failed ({})", job.getId(), exception.getClass().getSimpleName());
             jobs.fail(job.getId(), userMessage(exception));
+        } finally {
+            jobs.clearCheckpointIfDeleted(job);
         }
     }
 

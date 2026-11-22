@@ -9,7 +9,7 @@ import type { DraftReference } from '../subtitles'
 import ProjectFlow from './ProjectFlow.vue'
 import ProjectMaterials from './ProjectMaterials.vue'
 
-const props = defineProps<{ active: boolean; requestedProject?: { id: number } }>()
+const props = defineProps<{ active: boolean; requestedProject?: { id: number }; revision: number }>()
 const emit = defineEmits<{
   deleted: [projectId: number]; historyChanged: []; subtitle: [reference: DraftReference]
   editState: [state: { dirty: boolean; busy: boolean }]
@@ -173,7 +173,7 @@ async function deleteProfile() {
   }
 }
 
-watch([() => props.active, () => props.requestedProject], ([active, request], [, previousRequest]) => {
+watch([() => props.active, () => props.requestedProject, () => props.revision], ([active, request], [, previousRequest]) => {
   if (!active) return
   if (request && request !== previousRequest) void open(request.id)
   else if (activeId.value !== null) void refresh()
@@ -248,7 +248,7 @@ onBeforeUnmount(() => {
     <t-dialog :visible="deleting !== null" header="删除人物档案？"
       :confirm-btn="{ content: '删除档案', theme: 'danger', loading: submitting }"
       @confirm="deleteProfile" @cancel="closeDelete" @close="closeDelete">
-      <p v-if="deleting" class="project-delete-note">「{{ deleting.name }}」的资料和稿件会从工作台移除，排队的生成任务会取消。</p>
+      <p v-if="deleting" class="project-delete-note">「{{ deleting.name }}」和它的资料、稿件、生成记录将永久删除。尚未完成的生成任务也会结束。</p>
       <t-alert v-if="formError" theme="error" :message="formError" />
     </t-dialog>
   </section>

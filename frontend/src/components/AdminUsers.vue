@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next'
 import { Card as TCard, MessagePlugin, Table as TTable } from 'tdesign-vue-next'
 import type { AdminPage, AdminUser, PointCredit } from '../admin'
@@ -15,6 +15,14 @@ const columns = [
   { colKey: 'enabled', title: '账号状态', width: '17%' },
   { colKey: 'actions', title: '操作', align: 'right' as const },
 ]
+const creditColumns = [
+  { colKey: 'createdAt', title: '入账时间', width: 190 },
+  { colKey: 'points', title: '入账积分', width: 122, align: 'right' as const },
+  { colKey: 'balanceAfter', title: '入账后余额', width: 142, align: 'right' as const },
+  { colKey: 'operatorId', title: '操作者', width: 140 },
+  { colKey: 'note', title: '入账原因' },
+]
+const pointNumbers = new Intl.NumberFormat('zh-CN')
 const rows = ref<AdminUser[]>([])
 const phone = ref('')
 const search = ref('')
@@ -25,15 +33,19 @@ const error = ref('')
 const dialogError = ref('')
 const saving = ref(false)
 const enabling = ref<number>()
-const action = ref<'create' | 'edit' | 'grant' | 'history' | 'disable'>()
+const action = ref<'create' | 'edit' | 'grant' | 'history' | 'disable' | 'delete'>()
 const selected = ref<AdminUser>()
 const form = reactive({ phone: '', password: '', points: 0, note: '' })
 const credits = ref<PointCredit[]>([])
 const readingCredits = ref(false)
+let creditRequest: AbortController | undefined
 let grantRequestId = ''
-const titles = { create: '新增用户', edit: '编辑用户', grant: '添加积分', history: '积分记录', disable: '停用账号' }
+const titles = { create: '新增用户', edit: '编辑用户', grant: '添加积分', history: '积分记录', disable: '停用账号', delete: '删除用户' }
 const confirm = computed(() => {
-  if (action.value === 'disable') return { content: '停用', theme: 'danger' as const, loading: saving.value }
+  if (action.value === 'delete') return { content: '确认删除', theme: 'danger' as const, loading: saving.value }
+  if (action.value === 'disable') {
+    return { content: '停用', theme: 'warning' as const, class: 'admin-disable-button', loading: saving.value }
+  }
   return { content: action.value === 'grant' ? '确认入账' : '保存', loading: saving.value }
 })
 
@@ -56,6 +68,7 @@ async function load(next = page.value, query = search.value) {
 }
 
 function open(mode: Exclude<typeof action.value, undefined>, user?: AdminUser) {
+  creditRequest?.abort()
   selected.value = user
   form.phone = user?.phone ?? ''
   form.password = ''
@@ -68,19 +81,23 @@ function open(mode: Exclude<typeof action.value, undefined>, user?: AdminUser) {
 
 async function openHistory(user: AdminUser) {
   open('history', user)
+  const request = new AbortController()
+  creditRequest = request
   credits.value = []
   readingCredits.value = true
   try {
-    credits.value = await api<PointCredit[]>(path + '/' + user.id + '/credits')
+    const result = await api<PointCredit[]>(path + '/' + user.id + '/credits', { signal: request.signal })
+    if (!request.signal.aborted) credits.value = result
   } catch (failure) {
-    dialogError.value = errorMessage(failure)
+    if (!request.signal.aborted) dialogError.value = errorMessage(failure)
   } finally {
-    readingCredits.value = false
+    if (!request.signal.aborted) readingCredits.value = false
   }
 }
 
 function close() {
   if (saving.value) return
+  creditRequest?.abort()
   action.value = undefined
   form.password = ''
 }
@@ -124,6 +141,8 @@ async function save() {
       }, 'PATCH'))
     } else if (mode === 'disable') {
       await changeStatus(userPath, false)
+    } else if (mode === 'delete') {
+      await api<void>(userPath, { method: 'DELETE' })
     } else {
       await api<PointCredit>(userPath + '/credits', jsonBody({
         requestId: grantRequestId, points: form.points, note: form.note.trim(),
@@ -131,7 +150,12 @@ async function save() {
     }
     action.value = undefined
     form.password = ''
-    if (mode !== 'disable') {
+    if (mode === 'delete') {
+      const next = rows.value.length === 1 && !hasMore.value ? Math.max(1, page.value - 1) : page.value
+      rows.value = rows.value.filter(row => row.id !== user?.id)
+      void MessagePlugin.success('用户已删除')
+      await load(next)
+    } else if (mode !== 'disable') {
       void MessagePlugin.success(mode === 'grant' ? '积分已入账' : '已保存')
       await load(mode === 'create' ? 1 : page.value, mode === 'create' ? '' : search.value)
     }
@@ -144,6 +168,7 @@ async function save() {
 }
 
 onMounted(() => void load())
+onBeforeUnmount(() => creditRequest?.abort())
 </script>
 
 <template>
@@ -171,18 +196,22 @@ onMounted(() => void load())
             <strong v-if="row.username" class="admin-user-name">{{ row.username }}</strong>
             <p :class="['admin-number', row.username ? 'secondary-text' : 'admin-user-name']">{{ row.phone }}</p>
           </template>
-          <template #points="{ row }"><span class="admin-number">{{ row.points.toLocaleString('zh-CN') }}</span></template>
+          <template #points="{ row }"><span class="tabular-number">{{ pointNumbers.format(row.points) }}</span></template>
           <template #enabled="{ row }">
             <t-tag :theme="row.enabled ? 'success' : 'default'" variant="light">{{ row.enabled ? '正常' : '已停用' }}</t-tag>
           </template>
           <template #actions="{ row }">
             <div class="admin-row-actions">
-              <t-button variant="text" theme="default" :disabled="enabling !== undefined" @click="open('edit', row)">编辑</t-button>
-              <t-button variant="text" theme="default" :disabled="enabling !== undefined" @click="openHistory(row)">积分记录</t-button>
-              <t-button variant="text" :theme="row.enabled ? 'danger' : 'primary'" :loading="enabling === row.id"
+              <t-button variant="outline" theme="default" :disabled="enabling !== undefined" @click="open('edit', row)">编辑</t-button>
+              <t-button variant="outline" theme="default" aria-haspopup="dialog" :disabled="enabling !== undefined"
+                @click="openHistory(row)">积分记录</t-button>
+              <t-button variant="outline" theme="default" :disabled="enabling !== undefined" @click="open('grant', row)">添加积分</t-button>
+              <t-button :theme="row.enabled ? 'warning' : 'primary'" :class="{ 'admin-disable-button': row.enabled }"
+                :loading="enabling === row.id"
                 :disabled="loading || saving || enabling !== undefined"
                 @click="row.enabled ? open('disable', row) : enable(row)">{{ row.enabled ? '停用' : '启用' }}</t-button>
-              <t-button variant="outline" :disabled="enabling !== undefined" @click="open('grant', row)">添加积分</t-button>
+              <t-button theme="danger" aria-haspopup="dialog" :disabled="loading || saving || enabling !== undefined"
+                @click="open('delete', row)">删除</t-button>
             </div>
           </template>
         </t-table>
@@ -195,11 +224,10 @@ onMounted(() => void load())
           @click="load(page + 1)">下一页</t-button>
       </div>
     </t-card>
-    <t-dialog :visible="!!action" :header="action ? titles[action] : ''" :confirm-btn="confirm"
-      cancel-btn="取消" @confirm="save" @close="close" @cancel="close">
-      <template v-if="action === 'history'" #footer>
-        <t-button theme="default" variant="outline" @click="close">关闭</t-button>
-      </template>
+    <t-dialog :visible="!!action" :header="action ? titles[action] : ''"
+      :width="action === 'history' ? 'min(1100px, calc(100vw - 48px))' : undefined"
+      :confirm-btn="action === 'history' ? null : confirm" :cancel-btn="action === 'history' ? '关闭' : '取消'"
+      @confirm="save" @close="close" @cancel="close">
       <t-form v-if="action === 'create' || action === 'edit'" :data="form" label-align="top" @submit="save">
         <t-form-item label="手机号" for="admin-user-phone" required-mark>
           <t-input v-field-id="'admin-user-phone'" v-model="form.phone" :maxlength="11" :disabled="saving" />
@@ -219,19 +247,30 @@ onMounted(() => void load())
           <t-input v-field-id="'admin-grant-note'" v-model="form.note" :maxlength="200" :disabled="saving" />
         </t-form-item>
       </t-form>
-      <div v-else-if="action === 'history'" class="admin-ledger">
-        <p>{{ selected?.phone }} · 余额 {{ credits[0]?.balanceAfter ?? selected?.points }} 积分</p>
-        <t-loading v-if="readingCredits" text="读取积分记录" />
-        <p v-else-if="!credits.length && !dialogError" class="secondary-text">还没有积分记录。</p>
-        <div v-for="credit in credits" :key="credit.id" class="utility-row">
+      <div v-else-if="action === 'history' && selected" class="admin-ledger">
+        <div class="admin-ledger-summary">
           <div>
-            <strong>{{ credit.note }}</strong>
-            <p class="secondary-text">{{ dates.format(new Date(credit.createdAt)) }} · 操作者 {{ operatorName }}</p>
+            <strong v-if="selected.username" class="admin-user-name">{{ selected.username }}</strong>
+            <p :class="['tabular-number', selected.username ? 'secondary-text' : 'admin-user-name']">{{ selected.phone }}</p>
           </div>
-          <span>+{{ credit.points }} · 余额 {{ credit.balanceAfter }}</span>
+          <div class="admin-ledger-balance">
+            <span class="secondary-text">当前积分余额</span>
+            <strong class="tabular-number">{{ pointNumbers.format(credits[0]?.balanceAfter ?? selected.points) }}</strong>
+          </div>
+        </div>
+        <div v-if="!dialogError" class="admin-table">
+          <t-table :data="credits" :columns="creditColumns" :loading="readingCredits" row-key="id"
+            max-height="min(460px, 56vh)" hover empty="还没有积分记录">
+            <template #createdAt="{ row }"><time :datetime="row.createdAt">{{ dates.format(new Date(row.createdAt)) }}</time></template>
+            <template #points="{ row }"><strong class="admin-ledger-credit tabular-number">+{{ pointNumbers.format(row.points) }}</strong></template>
+            <template #balanceAfter="{ row }"><span class="tabular-number">{{ pointNumbers.format(row.balanceAfter) }}</span></template>
+            <template #operatorId>{{ operatorName }}</template>
+            <template #note="{ row }"><span class="admin-ledger-note">{{ row.note || '—' }}</span></template>
+          </t-table>
         </div>
       </div>
       <p v-else-if="action === 'disable'">停用 {{ selected?.phone }} 后，该账号将退出登录。可在用户列表中重新启用。</p>
+      <p v-else-if="action === 'delete'">永久删除用户 {{ selected?.phone }}？该用户的对话、稿件、人物档案、字幕任务、充值申请和积分记录也会删除，无法恢复。</p>
       <t-alert v-if="dialogError" class="admin-probe" theme="error" :message="dialogError" />
     </t-dialog>
   </section>

@@ -17,7 +17,7 @@ public final class RechargeRequests {
 
     public record Submit(
             @NotNull UUID requestId,
-            @NotNull @DecimalMin("0.01") @DecimalMax("1000000") @Digits(integer = 7, fraction = 2) BigDecimal amount,
+            @NotNull @DecimalMin("1") @DecimalMax("1000000") @Digits(integer = 7, fraction = 2) BigDecimal amount,
             @Size(max = 300) String note,
             @NotNull MultipartFile receipt) {
     }

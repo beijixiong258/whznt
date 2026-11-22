@@ -18,7 +18,6 @@ public class Conversation {
     private Kind kind;
     private String title;
     private OffsetDateTime updatedAt;
-    private OffsetDateTime deletedAt;
 
     public enum Kind {
         WRITING, CHAT

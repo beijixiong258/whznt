@@ -15,6 +15,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -25,10 +26,13 @@ import java.util.Locale;
 public class PaymentImages {
 
     private static final int MAX_BYTES = 10 * 1024 * 1024;
-    private final Path qrPath;
+    private final Path defaultQrPath;
+    private final Path managedQrPath;
 
-    public PaymentImages(@Value("${whznt.recharge.qr-file:}") String filename) {
-        this.qrPath = filename.isBlank() ? null : Path.of(filename).toAbsolutePath().normalize();
+    public PaymentImages(@Value("${whznt.recharge.qr-file:}") String filename,
+                         @Value("${whznt.storage-dir}") String storageDir) {
+        defaultQrPath = filename.isBlank() ? null : Path.of(filename).toAbsolutePath().normalize();
+        managedQrPath = Path.of(storageDir).toAbsolutePath().normalize().resolve("recharge-qr");
     }
 
     public boolean qrAvailable() {
@@ -41,6 +45,32 @@ public class PaymentImages {
             throw WorkspaceException.notFound("收款二维码尚未配置。");
         }
         return qr;
+    }
+
+    public void saveQr(MultipartFile file) {
+        if (file.isEmpty() || file.getSize() > MAX_BYTES) {
+            throw WorkspaceException.badRequest("请选择一张不超过 10 MB 的 PNG 或 JPG 收款二维码。");
+        }
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+            mediaType(bytes);
+        } catch (IOException exception) {
+            throw WorkspaceException.badRequest("无法读取收款二维码，请重新选择图片。");
+        }
+
+        try {
+            Files.createDirectories(managedQrPath.getParent());
+            Path pending = Files.createTempFile(managedQrPath.getParent(), "recharge-qr-", ".tmp");
+            try {
+                Files.write(pending, bytes);
+                Files.move(pending, managedQrPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                Files.deleteIfExists(pending);
+            }
+        } catch (IOException exception) {
+            throw WorkspaceException.unavailable("无法保存收款二维码，请检查后端存储。");
+        }
     }
 
     public Receipt readReceipt(MultipartFile file) {
@@ -56,6 +86,7 @@ public class PaymentImages {
     }
 
     private ImageView qr() {
+        Path qrPath = Files.exists(managedQrPath) ? managedQrPath : defaultQrPath;
         if (qrPath == null || !Files.isRegularFile(qrPath)) return null;
         try {
             if (Files.size(qrPath) > MAX_BYTES) return null;

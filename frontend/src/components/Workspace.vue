@@ -47,6 +47,7 @@ const requestedProject = ref<{ id: number }>()
 const subtitleReference = ref<DraftReference>()
 const chatKey = ref(0)
 const historyRevision = ref(0)
+const projectRevision = ref(0)
 const recent = reactive<Record<ConversationKind, ConversationRow[]>>({ CHAT: [], WRITING: [] })
 const activeIds = reactive<{ write: number | null; chat: number | null }>({ write: null, chat: null })
 let recentRequest: AbortController | undefined
@@ -62,7 +63,7 @@ const historyTitle = ref('')
 const historyError = ref('')
 const savingHistory = ref(false)
 const historyActionLabel = computed(() => {
-  if (historyAction.value?.row.kind === 'WRITING') return '移除稿件'
+  if (historyAction.value?.row.kind === 'WRITING') return '删除稿件'
   return historyAction.value?.kind === 'rename' ? '重命名对话' : '删除对话'
 })
 const editingUsername = ref(false)
@@ -199,12 +200,13 @@ async function saveHistoryAction() {
       void MessagePlugin.success('已重命名对话')
     } else {
       await api<void>(path, { method: 'DELETE' })
+      if (action.row.projectId != null) projectRevision.value++
       const target = action.row.kind === 'WRITING' ? 'write' : 'chat'
       if (activeIds[target] === action.row.id) {
         resetConversation(target)
         if (pane.value === target) openPane(target === 'write' ? 'manuscripts' : 'chat')
       }
-      void MessagePlugin.success(target === 'write' ? '已移除稿件' : '已删除对话')
+      void MessagePlugin.success(target === 'write' ? '已删除稿件' : '已删除对话')
     }
     historyAction.value = null
     refreshHistory()
@@ -239,9 +241,8 @@ function closeUsername() {
 async function saveUsername() {
   if (savingUsername.value) return
   const value = username.value.trim()
-  const width = [...value].reduce((size, char) => size + (char.charCodeAt(0) < 128 ? 1 : 2), 0)
-  if (width > 20) {
-    usernameError.value = '最多填写 10 个汉字或 20 个英文字母。'
+  if ([...value].length > 20) {
+    usernameError.value = '用户名最多 20 个字符。'
     return
   }
   savingUsername.value = true
@@ -321,7 +322,7 @@ onMounted(() => void loadRecentHistory())
         <t-avatar image="/brand.png" size="36px" aria-hidden="true" />
         <span class="rail-label">网红内容生成平台</span>
       </div>
-      <t-button class="rail-new" block aria-label="新对话" title="新对话" @click="startNew('chat')">
+      <t-button class="rail-new" size="large" block aria-label="新对话" title="新对话" @click="startNew('chat')">
         <template #icon><AddIcon /></template>
         <span class="rail-label">新对话</span>
       </t-button>
@@ -335,16 +336,16 @@ onMounted(() => void loadRecentHistory())
         </t-menu>
       </nav>
       <section v-for="shelf in shelves" :key="shelf.pane" class="rail-history" :aria-label="shelf.label">
-        <t-button class="rail-history-link" size="small" variant="text" block :theme="selectedMenu === shelf.pane ? 'primary' : 'default'"
+        <t-button class="rail-history-link" size="large" variant="text" block :theme="selectedMenu === shelf.pane ? 'primary' : 'default'"
           :aria-label="shelf.label" :title="shelf.label" :aria-current="selectedMenu === shelf.pane ? 'page' : undefined"
           @click="openPane(shelf.pane)">
+          <template #icon><component :is="shelf.icon" /></template>
           <span class="rail-label">{{ shelf.label }}</span>
-          <component :is="shelf.icon" />
         </t-button>
         <div v-if="recent[shelf.kind].length" class="rail-recent">
           <div v-for="row in recent[shelf.kind]" :key="row.id" class="rail-recent-row"
             :class="{ 'rail-recent-active': activeConversation === row.id }">
-            <t-button class="rail-recent-item" variant="text" theme="default" size="small" block
+            <t-button class="rail-recent-item" variant="text" theme="default" block
               :disabled="opening" :title="row.title" :aria-current="activeConversation === row.id ? 'true' : undefined"
               @click="openHistory(row.id, row.kind)">
               <template #icon><component :is="shelf.itemIcon" /></template>
@@ -356,7 +357,7 @@ onMounted(() => void loadRecentHistory())
         </div>
       </section>
       <div class="rail-footer">
-        <t-button class="rail-recharge" variant="outline" block :theme="pane === 'recharge' ? 'primary' : 'default'"
+        <t-button class="rail-recharge" size="large" :variant="pane === 'recharge' ? 'base' : 'outline'" theme="primary" block
           aria-label="充值申请" title="充值申请" :aria-current="pane === 'recharge' ? 'page' : undefined" @click="openPane('recharge')">
           <template #icon><WalletIcon /></template>
           <span class="rail-label">充值申请</span>
@@ -402,7 +403,7 @@ onMounted(() => void loadRecentHistory())
           :revision="historyRevision" :opening="opening" kind="WRITING" @open="openHistory" @action="openHistoryAction"
           @back="openPane('experts')" @create="openPane('experts')" />
         <ProjectsPane v-if="opened.has('projects')" v-show="pane === 'projects'" :active="pane === 'projects'"
-          :requested-project="requestedProject" @deleted="projectDeleted" @history-changed="refreshHistory"
+          :requested-project="requestedProject" :revision="projectRevision" @deleted="projectDeleted" @history-changed="refreshHistory"
           @edit-state="projectEditState = $event" @subtitle="openSubtitles" />
         <SubtitlePane v-if="opened.has('subtitles')" v-show="pane === 'subtitles'" :active="pane === 'subtitles'"
           :requested-reference="subtitleReference" @edit-state="subtitleState = $event" />
@@ -416,14 +417,14 @@ onMounted(() => void loadRecentHistory())
     <t-dialog :visible="editingUsername" header="设置用户名" :confirm-btn="{ content: '保存', loading: savingUsername }"
       @confirm="saveUsername" @cancel="closeUsername" @close="closeUsername">
       <label class="sr-only" for="workspace-username">用户名</label>
-      <t-input v-field-id="'workspace-username'" v-model="username" clearable :maxlength="20"
+      <t-input v-field-id="'workspace-username'" v-model="username" clearable
         :disabled="savingUsername" placeholder="输入用户名" @enter="saveUsername" />
-      <p class="secondary-text username-help">最多 10 个汉字或 20 个英文字母。混用时，一个汉字占两位。</p>
+      <p class="secondary-text username-help">最多 20 个字符。</p>
       <t-alert v-if="usernameError" theme="error" :message="usernameError" />
     </t-dialog>
     <t-dialog :visible="historyAction !== null" :header="historyActionLabel"
       :confirm-btn="{
-        content: historyAction?.kind === 'rename' ? '保存' : historyAction?.row.kind === 'WRITING' ? '移除' : '删除',
+        content: historyAction?.kind === 'rename' ? '保存' : '确认删除',
         theme: historyAction?.kind === 'rename' ? 'primary' : 'danger',
         loading: savingHistory,
       }"
@@ -435,11 +436,11 @@ onMounted(() => void loadRecentHistory())
           :disabled="savingHistory" @enter="saveHistoryAction" />
       </template>
       <template v-else-if="historyAction">
-        <p class="history-delete-title">{{ historyAction.row.kind === 'WRITING' ? '移除' : '删除' }}「{{ historyAction.row.title }}」？</p>
+        <p class="history-delete-title">删除「{{ historyAction.row.title }}」？</p>
         <p>{{ historyAction.row.projectId
-          ? '稿件将从「我的稿件」移除，可继续从所属人物档案打开。'
-          : historyAction.row.kind === 'WRITING' ? '这份稿件及其版本将从工作台移除。'
-            : '这条对话和其中未保存的内容会从工作台移除。' }}</p>
+          ? '稿件和全部版本将永久删除，人物档案中的这份成果也会删除。'
+          : historyAction.row.kind === 'WRITING' ? '稿件和全部版本将永久删除。'
+            : '这条对话及其消息将永久删除。' }}</p>
       </template>
       <t-alert v-if="historyError" theme="error" :message="historyError" />
     </t-dialog>

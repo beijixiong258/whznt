@@ -9,7 +9,7 @@ import AdminUsers from './AdminUsers.vue'
 defineProps<{ username: string; error: string; loggingOut: boolean }>()
 const emit = defineEmits<{ logout: [] }>()
 const pages = {
-  recharges: { title: '充值记录', icon: WalletIcon },
+  recharges: { title: '充值管理', icon: WalletIcon },
   users: { title: '用户管理', icon: UserIcon },
   upstream: { title: 'AI 提供商配置', icon: SettingIcon },
 } as const

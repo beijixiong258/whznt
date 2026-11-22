@@ -69,6 +69,6 @@ public class HistoryController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remove(@AuthenticationPrincipal AccountPrincipal principal, @PathVariable long id) {
-        conversations.removeFromHistory(principal.accountId(), id);
+        conversations.deleteConversation(principal.accountId(), id);
     }
 }

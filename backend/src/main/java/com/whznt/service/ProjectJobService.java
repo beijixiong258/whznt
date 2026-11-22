@@ -16,4 +16,5 @@ public interface ProjectJobService extends IService<ProjectJob> {
     ProjectGeneration.Plan planOf(ProjectJob job);
     void complete(long jobId, ProjectGeneration.Plan plan, String result, List<Long> passageIds, String model);
     void fail(long id, String message);
+    void clearCheckpointIfDeleted(ProjectJob job);
 }

@@ -92,6 +92,9 @@ public class ProjectJobServiceImpl extends ServiceImpl<ProjectJobMapper, Project
     public void complete(long jobId, ProjectGeneration.Plan plan, String result, List<Long> passageIds, String model) {
         PersonProject project = projects.lockOwned(plan.ownerId(), plan.projectId());
         ProjectJob job = baseMapper.lock(jobId);
+        if (job == null) {
+            throw WorkspaceException.notFound("这次生成已删除。");
+        }
         if (job.getState() == ProjectJob.State.COMPLETED) {
             return;
         }
@@ -109,6 +112,14 @@ public class ProjectJobServiceImpl extends ServiceImpl<ProjectJobMapper, Project
     public void fail(long id, String message) {
         lambdaUpdate().eq(ProjectJob::getId, id).eq(ProjectJob::getState, ProjectJob.State.RUNNING)
                 .set(ProjectJob::getError, message).set(ProjectJob::getState, ProjectJob.State.FAILED).update();
+    }
+
+    @Override
+    @Transactional
+    public void clearCheckpointIfDeleted(ProjectJob job) {
+        if (baseMapper.lock(job.getId()) == null) {
+            baseMapper.clearCheckpoint(job.getProjectId() + "/" + job.getRequestKey());
+        }
     }
 
     private String encode(ProjectGeneration.Plan plan) {

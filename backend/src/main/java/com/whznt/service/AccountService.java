@@ -22,7 +22,7 @@ public interface AccountService extends IService<Account>, UserDetailsService {
     AdminViews.User createUser(String phone, String password);
     AdminViews.Page<AdminViews.User> users(String phone, int page);
     AdminViews.User updateUser(long id, AdminRequests.UpdateUser input);
-    void disableUser(long id);
+    void deleteUser(long id);
     List<AdminViews.Credit> credits(long id);
     AdminViews.Credit addPoints(long id, long operatorId, UUID requestId, Long orderId, int points, String note);
 }

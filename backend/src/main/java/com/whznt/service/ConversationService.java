@@ -21,7 +21,7 @@ public interface ConversationService extends IService<Conversation> {
 
     WorkspaceViews.ConversationRow rename(long ownerId, long id, String title);
 
-    void removeFromHistory(long ownerId, long id);
+    void deleteConversation(long ownerId, long id);
 
     void touch(Conversation conversation, String titleIfUnnamed);
 }

@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -49,6 +50,11 @@ public class RechargeServiceImpl extends ServiceImpl<RechargeOrderMapper, Rechar
     }
 
     @Override
+    public void saveQr(MultipartFile file) {
+        images.saveQr(file);
+    }
+
+    @Override
     public List<RechargeViews.Order> orders(long ownerId) {
         return lambdaQuery().eq(RechargeOrder::getOwnerId, ownerId).orderByDesc(RechargeOrder::getId)
                 .list().stream().map(RechargeViews.Order::from).toList();
@@ -64,10 +70,18 @@ public class RechargeServiceImpl extends ServiceImpl<RechargeOrderMapper, Rechar
         RechargeOrder priorRequest = lambdaQuery().eq(RechargeOrder::getOwnerId, ownerId)
                 .eq(RechargeOrder::getRequestKey, requestKey).one();
         if (priorRequest != null) return RechargeViews.Order.from(priorRequest);
+        if (request.amount().stripTrailingZeros().scale() > 0) {
+            throw WorkspaceException.badRequest("充值金额必须为整数元。");
+        }
         PaymentImages.Receipt receipt = images.readReceipt(request.receipt());
         RechargeOrder priorReceipt = lambdaQuery().eq(RechargeOrder::getOwnerId, ownerId)
-                .eq(RechargeOrder::getReceiptSha256, receipt.sha256()).one();
-        if (priorReceipt != null) return RechargeViews.Order.from(priorReceipt);
+                .eq(RechargeOrder::getReceiptSha256, receipt.sha256())
+                .in(RechargeOrder::getState, RechargeOrder.State.PENDING, RechargeOrder.State.CREDITED).one();
+        if (priorReceipt != null) {
+            String state = priorReceipt.getState() == RechargeOrder.State.CREDITED ? "已入账" : "待处理";
+            throw WorkspaceException.conflict("这张付款截图已用于「" + state + "」的申请 " + priorReceipt.getRequestNumber()
+                    + "。可在「申请记录」查看。若是另一笔付款，请上传对应的付款截图。");
+        }
         if (!images.qrAvailable()) {
             throw WorkspaceException.unavailable("收款二维码尚未配置，请稍后再提交。");
         }
@@ -114,6 +128,7 @@ public class RechargeServiceImpl extends ServiceImpl<RechargeOrderMapper, Rechar
     @Override
     @Transactional
     public RechargeViews.Order credit(long operatorId, long id, int points, String note) {
+        accounts.lock(requireOrder(getById(id)).getOwnerId());
         RechargeOrder order = requireOrder(baseMapper.lock(id));
         String reviewNote = Objects.toString(note, "").strip();
         if (order.getState() == RechargeOrder.State.CREDITED && Objects.equals(order.getCreditedPoints(), points)

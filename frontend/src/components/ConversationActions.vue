@@ -41,7 +41,7 @@ function select(action: ConversationAction) {
       <div v-if="visible" ref="actions" class="conversation-action-list" role="group" :aria-label="draft ? '稿件操作' : '会话操作'"
         @keydown.esc.stop.prevent="close">
         <t-button v-if="!draft" variant="text" theme="default" @click="select('rename')">重命名对话</t-button>
-        <t-button variant="text" theme="danger" @click="select('delete')">{{ draft ? '移除稿件' : '删除' }}</t-button>
+        <t-button variant="text" theme="danger" @click="select('delete')">{{ draft ? '删除稿件' : '删除' }}</t-button>
       </div>
     </template>
   </t-popup>

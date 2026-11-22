@@ -4,6 +4,7 @@ import com.whznt.config.AccountPrincipal;
 import com.whznt.dto.AdminRequests;
 import com.whznt.dto.WorkspaceRequests;
 import com.whznt.entity.RechargeOrder;
+import com.whznt.exception.WorkspaceException;
 import com.whznt.integration.TextModel;
 import com.whznt.service.AccountService;
 import com.whznt.service.RechargeService;
@@ -15,8 +16,10 @@ import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -73,8 +77,8 @@ public class AdminController {
 
     @DeleteMapping("/users/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void disableUser(@PathVariable long id) {
-        accounts.disableUser(id);
+    public void deleteUser(@PathVariable long id) {
+        accounts.deleteUser(id);
     }
 
     @GetMapping("/users/{id}/credits")
@@ -92,6 +96,21 @@ public class AdminController {
     public AdminViews.Page<AdminViews.Order> recharges(@RequestParam(required = false) RechargeOrder.State state,
                                                       @RequestParam(defaultValue = "1") @Positive int page) {
         return recharge.reviewQueue(state, page);
+    }
+
+    @GetMapping("/recharges/qr")
+    public ResponseEntity<Resource> rechargeQr() {
+        return RechargeController.image(recharge.qrImage());
+    }
+
+    @PostMapping(value = "/recharges/qr", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void saveRechargeQr(@RequestParam MultiValueMap<String, MultipartFile> uploads) {
+        List<MultipartFile> images = uploads.get("file");
+        if (uploads.size() != 1 || images == null || images.size() != 1) {
+            throw WorkspaceException.badRequest("每次只能上传一张收款二维码。");
+        }
+        recharge.saveQr(images.get(0));
     }
 
     @GetMapping("/recharges/{id}/receipt")

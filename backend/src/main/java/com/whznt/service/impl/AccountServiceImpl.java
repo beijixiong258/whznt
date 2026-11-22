@@ -51,9 +51,9 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
             throw new WorkspaceException(HttpStatus.FORBIDDEN, "管理员的用户名固定为管理员北极熊。");
         }
         String username = input.strip();
-        int width = username.codePoints().map(value -> value < 128 ? 1 : 2).sum();
-        if (username.codePoints().anyMatch(Character::isISOControl) || width > 20) {
-            throw WorkspaceException.badRequest("用户名须为单行，最多 10 个汉字或 20 个英文字母。");
+        if (username.codePointCount(0, username.length()) > 20
+                || username.codePoints().anyMatch(Character::isISOControl)) {
+            throw WorkspaceException.badRequest("用户名须为单行，最多 20 个字符。");
         }
         account.setUsername(username);
         updateById(account);
@@ -121,8 +121,8 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
 
     @Override
     @Transactional
-    public void disableUser(long id) {
-        updateUser(id, new AdminRequests.UpdateUser(null, null, false));
+    public void deleteUser(long id) {
+        removeById(ordinaryUser(baseMapper.lock(id)).getId());
     }
 
     @Override

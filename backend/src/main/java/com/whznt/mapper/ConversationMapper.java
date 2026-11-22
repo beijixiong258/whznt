@@ -12,10 +12,9 @@ import java.util.List;
 public interface ConversationMapper extends BaseMapper<Conversation> {
 
     String OWNED_CONVERSATION = """
-            SELECT c.id, c.owner_id, c.project_id, c.kind, c.title, c.updated_at, c.deleted_at
+            SELECT c.id, c.owner_id, c.project_id, c.kind, c.title, c.updated_at
             FROM conversation c
-            LEFT JOIN person_project p ON p.id = c.project_id
-            WHERE c.id = #{id} AND c.owner_id = #{ownerId} AND p.deleted_at IS NULL
+            WHERE c.id = #{id} AND c.owner_id = #{ownerId}
             """;
 
     @Select("""
@@ -30,13 +29,12 @@ public interface ConversationMapper extends BaseMapper<Conversation> {
                                          CASE WHEN input.value ->> 'format' = 'ARTICLE' THEN '公众号编辑' ELSE '短视频编导' END)
                        END AS assistant
                 FROM conversation c
-                LEFT JOIN person_project project ON project.id = c.project_id
                 LEFT JOIN draft d ON d.conversation_id = c.id
                 LEFT JOIN draft_version v ON v.id = d.current_version_id
                 CROSS JOIN LATERAL (
                     SELECT CASE WHEN v.writing_input IS JSON OBJECT THEN v.writing_input::json END AS value
                 ) input
-                WHERE c.owner_id = #{ownerId} AND c.deleted_at IS NULL AND project.deleted_at IS NULL
+                WHERE c.owner_id = #{ownerId}
                   AND (#{kind} = '' OR c.kind = #{kind})
                   AND (#{kind} <> 'WRITING' OR v.id IS NOT NULL)
                   AND c.updated_at >= coalesce(#{since}, '-infinity'::timestamptz)

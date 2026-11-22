@@ -107,7 +107,8 @@ onBeforeUnmount(() => abort?.abort())
         <div class="chat-meta">{{ message.role === 'USER' ? '你' : '创作助手' }}</div>
         <MarkdownView v-if="message.role === 'ASSISTANT'" :content="message.content" />
         <p v-else class="plain-text">{{ message.content }}</p>
-        <t-button v-if="message.role === 'ASSISTANT'" size="small" variant="text" @click="copy(message.content)">
+        <t-button v-if="message.role === 'ASSISTANT'" class="chat-copy" type="button"
+          theme="default" variant="outline" @click="copy(message.content)">
           复制回复
         </t-button>
       </article>
