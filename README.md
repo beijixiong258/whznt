@@ -2,7 +2,29 @@
 
 平台功能和技术路线请参阅[产品文档](./产品文档.md)。
 
-## 启动与停止
+## 下载 Release 镜像运行
+
+从 [GitHub Releases](https://github.com/beijixiong258/whznt/releases) 下载 `whznt-0.1.0-linux-amd64.tar`，打开 Docker Desktop 的 Linux 容器模式，在 PowerShell 中执行以下命令。
+
+```powershell
+docker load -i .\whznt-0.1.0-linux-amd64.tar
+docker run -d --name whznt --stop-timeout 30 -p 127.0.0.1:5173:80 `
+  -v whznt-release-db:/var/lib/postgresql/data `
+  -v whznt-release-files:/var/lib/whznt `
+  whznt:0.1.0
+```
+
+容器健康状态显示 `healthy` 后，打开 [本机工作台](http://127.0.0.1:5173)。日常用 `docker stop whznt` 和 `docker start whznt` 停止和启动。重新创建容器时继续挂载上述两个卷，即可保留数据库、资料和视频。
+
+首次部署时在工作台注册账号。执行 `docker exec -it whznt gosu postgres psql -U whznt -d whznt` 进入数据库，将下面的手机号替换为刚注册的手机号后执行。然后从管理员入口登录，在「AI 提供商配置」填写 API 密钥。
+
+```sql
+UPDATE account SET role = 'ADMIN' WHERE phone = '已注册的手机号';
+```
+
+从源码构建同款镜像时，在项目根目录运行 `docker buildx bake -f docker-bake.hcl --load release`。
+
+## 从源码启动与停止
 
 打开 Docker Desktop，在项目根目录执行相应命令。
 

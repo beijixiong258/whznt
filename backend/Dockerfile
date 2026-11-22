@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
     && rm -rf /var/lib/apt/lists/*
 COPY qmd/package.json qmd/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
-    NODE_LLAMA_CPP_SKIP_DOWNLOAD=true npm_config_nodedir=/usr/local npm ci --omit=dev
+    NODE_LLAMA_CPP_SKIP_DOWNLOAD=true npm_config_nodedir=/usr/local npm ci --omit=dev \
+    && rm -rf node_modules/@node-llama-cpp/*-cuda \
+              node_modules/@node-llama-cpp/*-cuda-ext \
+              node_modules/@node-llama-cpp/*-vulkan
 
 FROM node:26-bookworm-slim
 WORKDIR /app
@@ -29,6 +32,7 @@ ENV SERVER_ADDRESS=0.0.0.0 \
     WHZNT_STORAGE_DIR=/var/lib/whznt \
     WHZNT_SUBTITLE_PYTHON=/opt/subtitle/bin/python \
     WHZNT_SUBTITLE_MODEL=/opt/whisper \
+    QMD_FORCE_CPU=1 \
     HF_HUB_OFFLINE=1
 USER node
 EXPOSE 8080
