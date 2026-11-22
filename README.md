@@ -4,10 +4,10 @@
 
 ## 下载 Release 镜像运行
 
-从 [GitHub Releases](https://github.com/beijixiong258/whznt/releases) 下载 `whznt-linux-amd64.tar`，打开 Docker Desktop 的 Linux 容器模式，在 PowerShell 中执行以下命令。
+从 [GitHub Release](https://github.com/beijixiong258/whznt/releases/tag/whznt) 下载 `whznt.tar`，打开 Docker Desktop 的 Linux 容器模式，在 PowerShell 中执行以下命令。
 
 ```powershell
-docker load -i .\whznt-linux-amd64.tar
+docker load -i .\whznt.tar
 docker run -d --name whznt --stop-timeout 30 -p 127.0.0.1:5173:80 `
   -v whznt-release-db:/var/lib/postgresql/data `
   -v whznt-release-files:/var/lib/whznt `
