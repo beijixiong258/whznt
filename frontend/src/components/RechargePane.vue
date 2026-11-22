@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { TimeIcon } from 'tdesign-icons-vue-next'
 import { Card as TCard, Upload as TUpload } from 'tdesign-vue-next'
 import type { UploadFile } from 'tdesign-vue-next'
@@ -16,8 +16,13 @@ interface RechargeSettings {
 const props = defineProps<{ active: boolean }>()
 const settings = ref<RechargeSettings>()
 const orders = ref<RechargeOrder[]>([])
-const amount = ref(200)
+const presetAmount = ref(200)
 const customAmount = ref(false)
+const customValue = ref('')
+const amount = computed(() => customAmount.value ? Number(customValue.value.trim()) : presetAmount.value)
+const validAmount = computed(() => (!customAmount.value || /^[0-9]+$/.test(customValue.value.trim()))
+  && Number.isInteger(amount.value) && amount.value >= 1 && amount.value <= 1000000)
+const amountHint = '金额不合法，请输入 1 至 1,000,000 的整数。'
 const note = ref('')
 const receipts = ref<UploadFile[]>([])
 const accepted = ref<RechargeOrder>()
@@ -64,20 +69,25 @@ async function openRecords() {
 }
 
 function selectAmount(value: number) {
-  amount.value = value
+  presetAmount.value = value
   customAmount.value = false
 }
 
 function enterCustomAmount() {
+  if (!customAmount.value) customValue.value = String(presetAmount.value)
   customAmount.value = true
   void nextTick(() => document.getElementById('recharge-amount')?.focus())
 }
 
 async function submit() {
   if (submitting.value || !settings.value?.qrAvailable) return
+  if (!validAmount.value) {
+    error.value = ''
+    return
+  }
   const receipt = receipts.value[0]?.raw
-  if (!receipt || !Number.isInteger(amount.value) || amount.value < 1 || amount.value > 1000000) {
-    error.value = receipt ? '请输入 1 至 1,000,000 之间的整数金额。' : '请先上传付款截图。'
+  if (!receipt) {
+    error.value = '请先上传付款截图。'
     return
   }
   requestKey.value ??= crypto.randomUUID()
@@ -142,8 +152,9 @@ watch(() => props.active, value => { if (value) void loadSettings() })
             </div>
             <div v-if="customAmount" class="recharge-custom-amount">
               <label for="recharge-amount">输入整数金额（元）</label>
-              <t-input-number v-field-id="'recharge-amount'" v-model="amount" theme="normal" size="large"
-                :min="1" :max="1000000" :decimal-places="0" :disabled="submitting" />
+              <t-input v-field-id="'recharge-amount'" v-model="customValue" inputmode="numeric" size="large"
+                :status="validAmount ? 'default' : 'error'" :tips="validAmount ? undefined : amountHint"
+                :disabled="submitting" />
             </div>
           </div>
         </t-form-item>
@@ -152,7 +163,7 @@ watch(() => props.active, value => { if (value) void loadSettings() })
             <img :src="qrUrl" alt="收款二维码" width="160" height="160">
             <div>
               <h2>扫码支付</h2>
-              <strong class="recharge-pay-amount" aria-live="polite">{{ currency.format(amount || 0) }}</strong>
+              <strong class="recharge-pay-amount" aria-live="polite">{{ validAmount ? currency.format(amount) : '—' }}</strong>
               <p class="secondary-text">付款后上传截图，管理员核对后入账。</p>
             </div>
           </div>

@@ -467,7 +467,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .recharge-presets .t-button { min-height: 44px; font: var(--td-font-title-small); }
 .recharge-custom-amount { display: flex; align-items: center; gap: var(--td-comp-margin-m); }
-.recharge-custom-amount .t-input-number { width: 180px; }
+.recharge-custom-amount .t-input__wrap { width: 256px; }
 .recharge-details-with-code { grid-template-columns: minmax(340px, 2fr) minmax(0, 3fr); align-items: start; }
 .payment-code {
   display: flex;
@@ -499,7 +499,11 @@ h1, h2, h3, p { margin: 0; }
   gap: var(--td-comp-margin-s);
   white-space: nowrap;
 }
-.order-number { font: var(--td-font-body-small); overflow-wrap: anywhere; }
+.order-number {
+  font: var(--td-font-body-small);
+  font-family: ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
 
 .admin-shell {
   display: grid;
@@ -559,6 +563,8 @@ h1, h2, h3, p { margin: 0; }
 .admin-feedback { margin-bottom: var(--td-comp-margin-m); }
 .admin-table { overflow-x: auto; }
 .admin-table .t-table { min-width: 670px; }
+.admin-user-table .t-table { min-width: 820px; }
+.admin-user-table .admin-row-actions { flex-wrap: nowrap; }
 .admin-table .t-table th, .recharge-record-table .t-table th {
   color: var(--td-text-color-secondary);
   background: var(--td-bg-color-secondarycontainer);

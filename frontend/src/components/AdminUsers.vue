@@ -10,10 +10,10 @@ defineProps<{ operatorName: string }>()
 
 const path = '/api/admin/users'
 const columns = [
-  { colKey: 'phone', title: '用户', width: '28%' },
-  { colKey: 'points', title: '积分余额', width: '16%' },
-  { colKey: 'enabled', title: '账号状态', width: '17%' },
-  { colKey: 'actions', title: '操作', align: 'right' as const },
+  { colKey: 'phone', title: '用户' },
+  { colKey: 'points', title: '积分余额', width: 132 },
+  { colKey: 'enabled', title: '账号状态', width: 120 },
+  { colKey: 'actions', title: '操作', width: 416, align: 'right' as const },
 ]
 const creditColumns = [
   { colKey: 'createdAt', title: '入账时间', width: 190 },
@@ -190,7 +190,7 @@ onBeforeUnmount(() => creditRequest?.abort())
         </t-button>
       </div>
       <t-alert v-if="error" class="admin-feedback" theme="error" :message="error" />
-      <div class="admin-table">
+      <div class="admin-table admin-user-table">
         <t-table :data="rows" :columns="columns" :loading="loading" row-key="id" hover empty="没有找到用户">
           <template #phone="{ row }">
             <strong v-if="row.username" class="admin-user-name">{{ row.username }}</strong>

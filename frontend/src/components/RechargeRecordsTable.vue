@@ -14,7 +14,7 @@ defineSlots<{ actions?: (props: { row: RechargeRecord }) => void }>()
 
 const columns = computed(() => [
   ...(props.admin ? [{ colKey: 'phone', title: '用户手机号', width: 140 }] : []),
-  { colKey: 'details', title: '充值申请', width: 280 },
+  { colKey: 'details', title: '充值申请', width: 304 },
   { colKey: 'status', title: '处理状态', width: 120 },
   { colKey: 'messages', title: '留言' },
   { colKey: 'actions', title: '操作', width: props.admin ? 260 : 132, align: 'right' as const },
