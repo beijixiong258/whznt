@@ -31,7 +31,7 @@ COPY --chmod=755 start.sh /usr/local/bin/whznt-start
 ENV LANG=C.UTF-8 \
     PATH="/usr/lib/postgresql/16/bin:$PATH" \
     PGDATA=/var/lib/postgresql/data/pgdata \
-    SPRING_CONFIG_IMPORT=optional:file:/run/whznt/config/ai.properties \
+    SPRING_CONFIG_IMPORT=optional:file:/run/whznt/config/ai.properties,optional:file:/run/whznt/config/release-admin.properties \
     WHZNT_RECHARGE_QR_FILE=/run/whznt/config/recharge-qr.png
 VOLUME ["/var/lib/postgresql/data", "/var/lib/whznt"]
 EXPOSE 80

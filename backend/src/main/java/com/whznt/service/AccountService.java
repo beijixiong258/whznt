@@ -17,6 +17,7 @@ public interface AccountService extends IService<Account>, UserDetailsService {
     AccountPrincipal loadUserByUsername(String username);
 
     void register(String phone, String password);
+    void provisionAdmin(String phone, String password);
     WorkspaceViews.Account profile(long id);
     WorkspaceViews.Account updateUsername(long id, String username);
     AdminViews.User createUser(String phone, String password);

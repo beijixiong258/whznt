@@ -16,11 +16,30 @@ docker run -d --name whznt --stop-timeout 30 -p 127.0.0.1:5173:80 `
 
 容器健康状态显示 `healthy` 后，打开 [本机工作台](http://127.0.0.1:5173)。日常用 `docker stop whznt` 和 `docker start whznt` 停止和启动。重新创建容器时继续挂载上述两个卷，即可保留数据库、资料和视频。
 
-首次部署时在工作台注册账号。执行 `docker exec -it whznt gosu postgres psql -U whznt -d whznt` 进入数据库，将下面的手机号替换为刚注册的手机号后执行。然后从管理员入口登录，在「AI 提供商配置」填写 API 密钥。
+### 首次启动时创建管理员
+
+在本机的 `config/release-admin.properties` 中填写管理员凭据。
+
+```properties
+whznt.bootstrap-admin.phone=你的11位大陆手机号
+whznt.bootstrap-admin.password=你的6到20字符密码
+```
+
+执行上面的 `docker run` 时，在镜像名之前加入以下挂载参数，从当前目录读取配置文件。
+
+```powershell
+--mount "type=bind,source=$((Get-Item .\config\release-admin.properties).FullName),target=/run/whznt/config/release-admin.properties,readonly" `
+```
+
+容器就绪后，在 [管理员登录页](http://127.0.0.1:5173/admin/login) 使用上述凭据登录，显示名称为「管理员北极熊」。再次启动时使用数据库中已保存的管理员账号。
+
+也可以在工作台注册账号后手动开通管理员。执行 `docker exec -it whznt gosu postgres psql -U whznt -d whznt` 进入数据库，将下面的手机号替换为刚注册的手机号后执行。
 
 ```sql
 UPDATE account SET role = 'ADMIN' WHERE phone = '已注册的手机号';
 ```
+
+登录后台后，在「AI 提供商配置」填写文本模型的 API 密钥。
 
 从源码构建同款镜像时，在项目根目录运行 `docker buildx bake -f docker-bake.hcl --load release`。
 

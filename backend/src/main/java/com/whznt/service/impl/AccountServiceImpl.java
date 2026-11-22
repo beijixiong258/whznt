@@ -39,6 +39,15 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
     }
 
     @Override
+    public void provisionAdmin(String phone, String password) {
+        String normalizedPhone = validPhone(phone);
+        if (baseMapper.insertBootstrapAdmin(normalizedPhone, encodePassword(password), ADMIN_USERNAME) == 0
+                && !lambdaQuery().eq(Account::getPhone, normalizedPhone).eq(Account::getRole, Account.Role.ADMIN).exists()) {
+            throw new IllegalStateException("The bootstrap administrator phone is already registered as a regular user.");
+        }
+    }
+
+    @Override
     public WorkspaceViews.Account profile(long id) {
         return profileView(requireAccount(getById(id)));
     }
