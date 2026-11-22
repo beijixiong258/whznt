@@ -1,5 +1,6 @@
 package com.whznt.config;
 
+import com.whznt.mapper.AccountMapper;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +12,8 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.csrf.CsrfException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -24,13 +27,15 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain workspaceSecurity(HttpSecurity http) throws Exception {
+    SecurityFilterChain workspaceSecurity(HttpSecurity http, AccountMapper accounts) throws Exception {
         return http
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.ASYNC).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
+                .addFilterBefore(new AccountSessionFilter(accounts), AuthorizationFilter.class)
                 .requestCache(AbstractHttpConfigurer::disable)
                 .formLogin(login -> login
                         .loginProcessingUrl("/api/auth/login")
@@ -46,7 +51,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, exception) ->
                                 reply(response, 401, "请登录后继续。"))
                         .accessDeniedHandler((request, response, exception) ->
-                                reply(response, 403, "请求已失效，请刷新页面后重试。")))
+                                reply(response, 403, exception instanceof CsrfException
+                                        ? "请求已失效，请刷新页面后重试。" : "当前账号没有访问权限。")))
                 .build();
     }
 

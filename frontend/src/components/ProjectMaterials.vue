@@ -152,7 +152,7 @@ async function search() {
       <t-button @click="add()">添加资料</t-button>
     </div>
     <t-alert v-if="error" theme="error" :message="error" />
-    <t-card v-if="hits !== null" title="搜索结果" :bordered="true">
+    <t-card v-if="hits !== null" title="搜索结果">
       <template #actions><t-button size="small" variant="text" @click="hits = null">关闭</t-button></template>
       <p v-if="!hits.length" class="secondary-text">没有找到相关片段。</p>
       <div v-for="hit in hits" :key="hit.id" class="project-row">
@@ -160,7 +160,7 @@ async function search() {
         <t-button size="small" variant="text" @click="focused = hit">查看片段</t-button>
       </div>
     </t-card>
-    <t-card :bordered="true">
+    <t-card>
       <p v-if="!materials.length" class="secondary-text">可以粘贴原文，也可以导入 DOCX、TXT、MD 或文字版 PDF。</p>
       <div v-for="row in materials" :key="row.id" class="project-row">
         <div>

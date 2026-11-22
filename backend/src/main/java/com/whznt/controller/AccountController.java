@@ -36,6 +36,6 @@ public class AccountController {
 
     @GetMapping("/me")
     public WorkspaceViews.Account me(@AuthenticationPrincipal AccountPrincipal principal) {
-        return new WorkspaceViews.Account(principal.accountId(), principal.getUsername());
+        return new WorkspaceViews.Account(principal.accountId(), principal.getUsername(), principal.role());
     }
 }

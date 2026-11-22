@@ -11,7 +11,6 @@ import java.util.List;
 public interface ProjectJobService extends IService<ProjectJob> {
     ProjectViews.Job enqueue(long ownerId, long projectId, ProjectRequests.Generate request);
     List<ProjectViews.Job> recent(long projectId);
-    ProjectViews.Job status(long ownerId, long projectId, long id);
     ProjectJob claimNext();
     void recover();
     ProjectGeneration.Plan planOf(ProjectJob job);

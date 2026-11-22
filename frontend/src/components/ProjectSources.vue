@@ -41,7 +41,7 @@ defineExpose({ openCitation })
 </script>
 
 <template>
-  <t-card title="这个版本的来源" :bordered="true" class="sources-card">
+  <t-card title="这个版本的来源">
     <t-loading v-if="loading" text="正在读取来源" />
     <t-alert v-else-if="error" theme="error" :message="error" />
     <template v-else-if="sources">

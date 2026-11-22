@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { api, errorMessage, jsonBody } from '../api'
 import type { Account } from '../types'
 
-const props = defineProps<{ initialError: string }>()
+const props = defineProps<{ admin: boolean; initialError: string }>()
 const emit = defineEmits<{ authenticated: [account: Account] }>()
 
 const register = ref(false)
@@ -56,10 +56,10 @@ async function submit() {
   <main class="auth-layout">
     <aside class="auth-side">
       <div class="brand-lockup"><img class="brand-mark" src="/brand.png" alt="" width="44" height="44">网红内容生成平台</div>
-      <h1>用这个的真老牧师了</h1>
+      <h1>{{ admin ? '管理后台' : '用这个的真老牧师了' }}</h1>
     </aside>
     <section class="auth-card">
-      <h2>{{ register ? '创建个人账号' : '登录工作台' }}</h2>
+      <h2>{{ admin ? '管理员登录' : register ? '创建个人账号' : '登录工作台' }}</h2>
       <t-form class="auth-form" :data="{ phone, password }" label-align="top" @submit="submit">
         <t-form-item label="手机号" name="phone" for="phone">
           <t-input v-field-id="'phone'" v-model="phone" name="phone" type="tel" autocomplete="tel" placeholder="11 位手机号"
@@ -74,7 +74,7 @@ async function submit() {
           {{ register ? '注册并进入工作台' : '登录' }}
         </t-button>
       </t-form>
-      <t-button variant="text" theme="primary" :disabled="pending" class="auth-switch" @click="switchMode">
+      <t-button v-if="!admin" variant="text" theme="primary" :disabled="pending" class="auth-switch" @click="switchMode">
         {{ register ? '已有账号，去登录' : '创建账号' }}
       </t-button>
     </section>

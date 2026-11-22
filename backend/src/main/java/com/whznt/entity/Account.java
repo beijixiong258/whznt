@@ -13,4 +13,10 @@ public class Account {
     private Long id;
     private String phone;
     private String passwordHash;
+    private Role role;
+    private boolean enabled;
+    private int authVersion;
+    private int points;
+
+    public enum Role { USER, ADMIN }
 }

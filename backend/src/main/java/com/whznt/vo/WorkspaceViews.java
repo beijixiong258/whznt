@@ -1,6 +1,7 @@
 package com.whznt.vo;
 
 import com.whznt.dto.WritingInput;
+import com.whznt.entity.Account.Role;
 import com.whznt.entity.ChatMessage;
 import com.whznt.entity.Conversation;
 import com.whznt.entity.DraftVersion;
@@ -13,10 +14,7 @@ public final class WorkspaceViews {
     private WorkspaceViews() {
     }
 
-    public record Account(long id, String phone) {
-    }
-
-    public record ModelStatus(boolean available, String message) {
+    public record Account(long id, String phone, Role role) {
     }
 
     public record History(List<ConversationRow> items, boolean hasMore) {
@@ -49,12 +47,6 @@ public final class WorkspaceViews {
     }
 
     public record Version(VersionRow version, String content, WritingInput writingInput, String model) {
-    }
-
-    public record TopicIdea(String title, String angle, String audience, String takeaway) {
-    }
-
-    public record TopicIdeas(List<TopicIdea> ideas) {
     }
 
     public record RewriteResult(String content) {

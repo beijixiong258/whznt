@@ -4,9 +4,8 @@ import { Card as TCard, MessagePlugin } from 'tdesign-vue-next'
 import { api, errorMessage, jsonBody } from '../api'
 import { projectPath, running, stepLabels } from '../projects'
 import type { Artifact, ProjectDetail, ProjectJob, ProjectStep, Topic } from '../projects'
-import type { ModelStatus } from '../types'
 
-const props = defineProps<{ detail: ProjectDetail; model: ModelStatus }>()
+const props = defineProps<{ detail: ProjectDetail }>()
 const emit = defineEmits<{ changed: []; open: [conversationId: number, versionId?: number] }>()
 const steps: ProjectStep[] = ['TRAITS', 'STORY', 'POSITION', 'TOPICS']
 const jobLabels = { QUEUED: '排队中', RUNNING: '生成中', COMPLETED: '已完成', FAILED: '生成失败' }
@@ -98,9 +97,8 @@ function openArtifact(row: Artifact | undefined) {
 
 <template>
   <section class="project-flow">
-    <t-alert v-if="!model.available" theme="info" :message="model.message ?? '模型尚未就绪。'" />
     <div class="steps-grid">
-      <t-card v-for="step in steps" :key="step" :title="stepLabels[step]" :bordered="true">
+      <t-card v-for="step in steps" :key="step" :title="stepLabels[step]">
         <template #actions>
           <t-tag v-if="existing.has(step)" theme="success" variant="light">已保存</t-tag>
           <t-tag v-else-if="isGenerating(step)" theme="primary" variant="light">生成中</t-tag>
@@ -110,36 +108,36 @@ function openArtifact(row: Artifact | undefined) {
           <t-button v-if="existing.has(step)" size="small" variant="outline"
             @click="openArtifact(existing.get(step))">打开成果</t-button>
           <t-button v-else size="small" variant="outline" @click="beginImport(step)">录入已有成果</t-button>
-          <t-button size="small" :disabled="!model.available || isGenerating(step)"
+          <t-button size="small" :disabled="isGenerating(step)"
             @click="beginGeneration(step, existing.get(step))">
             {{ existing.has(step) ? '重做这一步' : '生成' }}
           </t-button>
         </div>
       </t-card>
     </div>
-    <t-card title="口播稿" :bordered="true">
-      <div v-if="detail.topics.length" class="project-rows">
+    <t-card title="口播稿">
+      <div v-if="detail.topics.length">
         <div v-for="topic in detail.topics" :key="topic.versionId + ':' + topic.index" class="project-row">
           <span>{{ topic.title }}</span>
-          <t-button size="small" variant="outline" :disabled="!model.available || isGenerating('SCRIPT')"
+          <t-button size="small" variant="outline" :disabled="isGenerating('SCRIPT')"
             @click="beginGeneration('SCRIPT', undefined, topic)">按题写口播</t-button>
         </div>
       </div>
       <p v-else class="secondary-text">生成或录入选题后，选一条写口播。</p>
-      <div v-if="scripts.length" class="project-rows scripts-list">
+      <div v-if="scripts.length" class="scripts-list">
         <h3>已保存口播稿</h3>
         <div v-for="script in scripts" :key="script.id" class="project-row">
           <span>{{ script.topic }}</span>
           <div class="project-actions">
             <t-button size="small" variant="outline" @click="openArtifact(script)">打开稿件</t-button>
-            <t-button size="small" variant="outline" :disabled="!model.available || isGenerating('SCRIPT')"
+            <t-button size="small" variant="outline" :disabled="isGenerating('SCRIPT')"
               @click="beginGeneration('SCRIPT', script)">重做这篇</t-button>
           </div>
         </div>
       </div>
     </t-card>
-    <t-card v-if="detail.jobs.length" title="生成记录" :bordered="true">
-      <div class="project-rows">
+    <t-card v-if="detail.jobs.length" title="生成记录">
+      <div>
         <div v-for="job in detail.jobs" :key="job.id" class="project-row">
           <div>
             <b>{{ stepLabels[job.step] }}</b>

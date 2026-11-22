@@ -27,7 +27,6 @@ public class PromptCatalog {
     private final String topicToDraft = read("从零写稿");
     private final String talk = read("口播稿");
     private final String article = read("图文稿");
-    private final String ideas = read("三个选题");
     private final String rewrite = read("选段改写");
     private final String chat = read("自由对话");
     private final ObjectMapper json;
@@ -39,10 +38,6 @@ public class PromptCatalog {
     public List<Message> write(WritingInput input) {
         String format = input.format() == WritingInput.Format.ARTICLE ? article : talk;
         return pair(topicToDraft + "\n\n" + format, writingParameters(input));
-    }
-
-    public List<Message> ideas(WritingInput input) {
-        return pair(ideas, writingParameters(input));
     }
 
     public List<Message> rewrite(WorkspaceRequests.Rewrite request) {

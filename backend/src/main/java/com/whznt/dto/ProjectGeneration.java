@@ -19,4 +19,7 @@ public final class ProjectGeneration {
             return new Sources(List.of(), List.of());
         }
     }
+
+    public record Result(String content, String model) {
+    }
 }

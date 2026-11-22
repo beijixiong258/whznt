@@ -5,11 +5,7 @@ export type RewriteAction = 'POLISH' | 'SHORTEN' | 'TONE'
 export interface Account {
   id: number
   phone: string
-}
-
-export interface ModelStatus {
-  available: boolean
-  message: string | null
+  role: 'USER' | 'ADMIN'
 }
 
 export interface WritingInput {
@@ -20,13 +16,6 @@ export interface WritingInput {
   durationSeconds: number | null
   format: WritingFormat
   background: string
-}
-
-export interface TopicIdea {
-  title: string
-  angle: string
-  audience: string
-  takeaway: string
 }
 
 export interface ConversationRow {

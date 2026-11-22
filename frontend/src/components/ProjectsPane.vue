@@ -4,11 +4,10 @@ import { Card as TCard, MessagePlugin, Tabs as TTabs, TabPanel as TTabPanel } fr
 import { api, errorMessage, jsonBody } from '../api'
 import { projectPath, running } from '../projects'
 import type { PersonProject, ProjectDetail } from '../projects'
-import type { ModelStatus } from '../types'
 import ProjectFlow from './ProjectFlow.vue'
 import ProjectMaterials from './ProjectMaterials.vue'
 
-const props = defineProps<{ active: boolean; requestedProject?: { id: number }; model: ModelStatus }>()
+const props = defineProps<{ active: boolean; requestedProject?: { id: number } }>()
 const emit = defineEmits<{ open: [conversationId: number, versionId?: number] }>()
 const projects = ref<PersonProject[]>([])
 const detail = ref<ProjectDetail | null>(null)
@@ -122,8 +121,8 @@ onBeforeUnmount(() => {
 <template>
   <section class="projects-pane">
     <div class="page-heading project-heading">
-      <h1>人物项目</h1>
-      <t-button @click="startProfile('new')">新建人物项目</t-button>
+      <h1>人物故事与定位</h1>
+      <t-button @click="startProfile('new')">新建人物档案</t-button>
     </div>
     <t-alert v-if="error" theme="error" :message="error" />
     <div v-if="options.length" class="project-toolbar">
@@ -133,14 +132,14 @@ onBeforeUnmount(() => {
     </div>
     <t-loading v-if="loading && !detail" text="正在读取人物项目" />
     <t-card v-else-if="!detail && !error">
-      <p class="secondary-text">新建项目后，可以录入人物简介或已有成果。</p>
+      <p class="secondary-text">先建一份人物档案，填一点自己的经历。接下来可以写人物故事、想账号定位和视频选题。</p>
     </t-card>
     <div v-if="detail" class="project-detail">
       <h2>{{ detail.project.name }}</h2>
       <p v-if="detail.project.summary" class="project-summary">{{ detail.project.summary }}</p>
       <t-tabs v-model="tab">
         <t-tab-panel value="flow" label="分步创作">
-          <ProjectFlow :key="detail.project.id" :detail="detail" :model="model"
+          <ProjectFlow :key="detail.project.id" :detail="detail"
             @changed="refresh()" @open="(id, version) => emit('open', id, version)" />
         </t-tab-panel>
         <t-tab-panel value="materials" label="资料与版本">
@@ -149,7 +148,7 @@ onBeforeUnmount(() => {
         </t-tab-panel>
       </t-tabs>
     </div>
-    <t-dialog :visible="editing !== null" :header="editing === 'edit' ? '编辑人物档案' : '新建人物项目'"
+    <t-dialog :visible="editing !== null" :header="editing === 'edit' ? '编辑人物档案' : '新建人物档案'"
       :confirm-btn="{ content: '保存', loading: submitting }" @confirm="saveProfile"
       @cancel="closeProfile" @close="closeProfile">
       <t-form :data="form" label-align="top" @submit="saveProfile">

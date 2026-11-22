@@ -6,6 +6,6 @@ import org.apache.ibatis.annotations.Select;
 
 public interface AccountMapper extends BaseMapper<Account> {
 
-    @Select("SELECT id FROM account WHERE id = #{id} FOR UPDATE")
-    Long lockId(long id);
+    @Select("SELECT * FROM account WHERE id = #{id} FOR UPDATE")
+    Account lock(long id);
 }

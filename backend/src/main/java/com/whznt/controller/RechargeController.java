@@ -29,8 +29,8 @@ public class RechargeController {
     private final RechargeService recharge;
 
     @GetMapping("/settings")
-    public RechargeViews.Settings settings() {
-        return recharge.settings();
+    public RechargeViews.Settings settings(@AuthenticationPrincipal AccountPrincipal account) {
+        return recharge.settings(account.accountId());
     }
 
     @GetMapping("/qr")
@@ -54,7 +54,7 @@ public class RechargeController {
         return image(recharge.receipt(account.accountId(), id));
     }
 
-    private static ResponseEntity<Resource> image(ImageView view) {
+    static ResponseEntity<Resource> image(ImageView view) {
         return ResponseEntity.ok().contentType(view.type()).cacheControl(CacheControl.noStore()).body(view.resource());
     }
 }

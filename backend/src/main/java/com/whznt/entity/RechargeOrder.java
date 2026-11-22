@@ -23,4 +23,11 @@ public class RechargeOrder {
     private String receiptSha256;
     private String receiptType;
     private OffsetDateTime createdAt;
+    private State state;
+    private Integer creditedPoints;
+    private Long reviewedBy;
+    private OffsetDateTime reviewedAt;
+    private String reviewNote;
+
+    public enum State { PENDING, CREDITED, REJECTED }
 }

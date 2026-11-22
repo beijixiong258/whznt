@@ -67,7 +67,7 @@ async function send(action: 'save' | 'export') {
 </script>
 
 <template>
-  <t-card :title="detail.task.name" :bordered="true" class="subtitle-editor">
+  <t-card :title="detail.task.name">
     <p v-if="detail.referenceTitle" class="secondary-text subtitle-reference">逐字稿 · {{ detail.referenceTitle }}</p>
     <div class="subtitle-preview">
       <video ref="player" :src="source + '/video'" controls playsinline preload="metadata"

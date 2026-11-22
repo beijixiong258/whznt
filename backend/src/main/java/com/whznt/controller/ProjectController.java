@@ -126,10 +126,4 @@ public class ProjectController {
                                     @Valid @RequestBody ProjectRequests.Generate input) {
         return jobs.enqueue(principal.accountId(), id, input);
     }
-
-    @GetMapping("/{id}/jobs/{jobId}")
-    public ProjectViews.Job status(@AuthenticationPrincipal AccountPrincipal principal, @PathVariable long id,
-                                   @PathVariable long jobId) {
-        return jobs.status(principal.accountId(), id, jobId);
-    }
 }

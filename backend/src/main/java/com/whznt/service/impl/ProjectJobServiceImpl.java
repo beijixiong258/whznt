@@ -8,7 +8,7 @@ import com.whznt.dto.ProjectRequests;
 import com.whznt.entity.PersonProject;
 import com.whznt.entity.ProjectJob;
 import com.whznt.exception.WorkspaceException;
-import com.whznt.integration.DeepSeekModel;
+import com.whznt.integration.TextModel;
 import com.whznt.mapper.ProjectJobMapper;
 import com.whznt.service.PersonProjectService;
 import com.whznt.service.ProjectArtifactService;
@@ -30,7 +30,7 @@ public class ProjectJobServiceImpl extends ServiceImpl<ProjectJobMapper, Project
     private final PersonProjectService projects;
     private final ProjectPlanService planner;
     private final ProjectArtifactService artifacts;
-    private final DeepSeekModel model;
+    private final TextModel model;
 
     @Override
     @Transactional
@@ -41,7 +41,7 @@ public class ProjectJobServiceImpl extends ServiceImpl<ProjectJobMapper, Project
         if (prior != null) {
             return ProjectViews.Job.from(prior);
         }
-        model.requireAvailable();
+        model.ready();
         ProjectGeneration.Plan plan = planner.plan(project, request);
         if (lambdaQuery().eq(ProjectJob::getProjectId, projectId).eq(ProjectJob::getStep, plan.step())
                 .eq(ProjectJob::getSlot, plan.slot()).in(ProjectJob::getState, ProjectJob.State.QUEUED,
@@ -64,16 +64,6 @@ public class ProjectJobServiceImpl extends ServiceImpl<ProjectJobMapper, Project
     public List<ProjectViews.Job> recent(long projectId) {
         return lambdaQuery().eq(ProjectJob::getProjectId, projectId).orderByDesc(ProjectJob::getId)
                 .last("LIMIT 20").list().stream().map(ProjectViews.Job::from).toList();
-    }
-
-    @Override
-    public ProjectViews.Job status(long ownerId, long projectId, long id) {
-        projects.requireOwned(ownerId, projectId);
-        ProjectJob job = lambdaQuery().eq(ProjectJob::getProjectId, projectId).eq(ProjectJob::getId, id).one();
-        if (job == null) {
-            throw WorkspaceException.notFound("找不到这次生成任务。");
-        }
-        return ProjectViews.Job.from(job);
     }
 
     @Override

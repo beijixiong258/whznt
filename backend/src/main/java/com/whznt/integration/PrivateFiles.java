@@ -86,6 +86,10 @@ public class PrivateFiles {
         return root.resolve("subtitles").resolve(Long.toString(taskId));
     }
 
+    public Path upstreamSettingsFile() {
+        return root.resolve("ai-upstream.json");
+    }
+
     private Path original(String key) {
         return root.resolve("originals").resolve(UUID.fromString(key).toString());
     }

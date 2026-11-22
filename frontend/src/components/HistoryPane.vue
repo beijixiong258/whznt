@@ -2,11 +2,11 @@
 import { onMounted, ref } from 'vue'
 import { ChatIcon, Edit1Icon, TimeIcon } from 'tdesign-icons-vue-next'
 import { Empty as TEmpty, List as TList, ListItem as TListItem } from 'tdesign-vue-next'
-import { api, errorMessage, jsonBody } from '../api'
-import type { ConversationKind, ConversationRow, HistoryPage } from '../types'
+import { api, errorMessage, jsonBody, loadConversations } from '../api'
+import type { ConversationKind, ConversationRow } from '../types'
 
 defineProps<{ opening: boolean }>()
-const emit = defineEmits<{ open: [id: number, kind: ConversationKind] }>()
+const emit = defineEmits<{ open: [id: number, kind: ConversationKind]; renamed: [] }>()
 
 const query = ref('')
 const currentQuery = ref('')
@@ -26,8 +26,7 @@ async function fetchPage(index: number) {
   pending.value = true
   error.value = ''
   try {
-    const params = new URLSearchParams({ q: currentQuery.value, page: String(index) })
-    const result = await api<HistoryPage>('/api/conversations?' + params)
+    const result = await loadConversations(currentQuery.value, index)
     items.value = index === 1 ? result.items : [...items.value, ...result.items]
     page.value = index
     hasMore.value = result.hasMore
@@ -64,6 +63,7 @@ async function rename() {
   try {
     await api<ConversationRow>('/api/conversations/' + renaming.value.id, jsonBody({ title: title.value }, 'PATCH'))
     renaming.value = null
+    emit('renamed')
     await fetchPage(1)
   } catch (failure) {
     renameError.value = errorMessage(failure)

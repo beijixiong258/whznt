@@ -2,7 +2,6 @@ package com.whznt.workflow;
 
 import com.whznt.dto.ProjectGeneration;
 import com.whznt.entity.ProjectJob;
-import com.whznt.integration.DeepSeekModel;
 import com.whznt.service.ProjectJobService;
 import com.whznt.service.ProjectMaterialService;
 import com.whznt.service.ProjectPromptService;
@@ -33,17 +32,15 @@ public class PersonCreationWorkflow {
     private final ProjectSearchService search;
     private final ProjectMaterialService materials;
     private final ProjectPromptService prompts;
-    private final DeepSeekModel model;
     private final CompiledGraph<AgentState> graph;
 
     public PersonCreationWorkflow(ProjectJobService jobs, ProjectSearchService search, ProjectMaterialService materials,
-                                  ProjectPromptService prompts, DeepSeekModel model, PostgresSaverV2 saver,
+                                  ProjectPromptService prompts, PostgresSaverV2 saver,
                                   ObjectStreamStateSerializer<AgentState> serializer) throws GraphStateException {
         this.jobs = jobs;
         this.search = search;
         this.materials = materials;
         this.prompts = prompts;
-        this.model = model;
         this.graph = new StateGraph<>(serializer)
                 .addNode("sources", node_async(this::collectSources))
                 .addNode("compose", node_async(this::compose))
@@ -69,8 +66,8 @@ public class PersonCreationWorkflow {
 
     private Map<String, Object> compose(AgentState state) {
         ProjectGeneration.Plan plan = plan(state);
-        String content = prompts.write(plan, materials.resolve(plan.projectId(), passageIds(state)));
-        return Map.of("content", content, "model", model.model());
+        ProjectGeneration.Result result = prompts.write(plan, materials.resolve(plan.projectId(), passageIds(state)));
+        return Map.of("content", result.content(), "model", result.model());
     }
 
     private Map<String, Object> save(AgentState state) {

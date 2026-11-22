@@ -1,20 +1,25 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { ArrowLeftIcon } from 'tdesign-icons-vue-next'
 import {
-  Card as TCard, Collapse as TCollapse, CollapsePanel as TCollapsePanel, Link as TLink, MessagePlugin,
+  Avatar as TAvatar, Card as TCard, Link as TLink, MessagePlugin,
   RadioButton as TRadioButton, RadioGroup as TRadioGroup,
 } from 'tdesign-vue-next'
 import { api, ApiError, errorMessage, jsonBody, loadConversation, streamGeneration, StreamInterrupted } from '../api'
 import type {
-  ConversationDetail, DraftVersion, GenerationRequest, Manuscript, ModelStatus,
-  RewriteAction, TopicIdea, WritingInput,
+  ConversationDetail, DraftVersion, GenerationRequest, Manuscript,
+  RewriteAction, WritingInput,
 } from '../types'
+import { writingExpertFor, writingExpertPrompt, writingExperts, type WritingExpert } from '../writingExperts'
 import MarkdownView from './MarkdownView.vue'
 import ProjectSources from './ProjectSources.vue'
 
-const props = defineProps<{ initial: ConversationDetail | null; initialVersion?: number; model: ModelStatus }>()
+const props = defineProps<{
+  initial: ConversationDetail | null; initialVersion?: number; initialExpert?: WritingExpert
+}>()
 const emit = defineEmits<{
   saved: []; dirty: [value: boolean]; busy: [value: boolean]
+  experts: []
   project: [id: number]; upstream: [id: number, version: number]
   subtitle: [reference: { draftId: number; versionId: number; title: string }]
 }>()
@@ -29,12 +34,18 @@ const content = ref(version.value?.content ?? '')
 const defaultInput: WritingInput = {
   topic: '', angle: '', audience: '', tone: '', durationSeconds: 150, format: 'TALK', background: '',
 }
-const form = reactive<WritingInput>({ ...(version.value?.writingInput ?? defaultInput) })
+const maxTopicLength = 300
+const maxBriefLength = 12000
+const referenceInput = ref(version.value?.writingInput ?? defaultInput)
+const brief = ref(briefFromInput(referenceInput.value))
+const expert = shallowRef(props.initialExpert ?? writingExpertFor(referenceInput.value))
+const expertOptions = writingExperts.map(option => ({ value: option.name, label: option.name }))
+const manualEditor = ref(false)
 const mode = ref<'edit' | 'preview'>('edit')
-const ideas = ref<TopicIdea[]>([])
-const operation = ref<'generate' | 'ideas' | 'save' | 'read' | 'rewrite'>()
+const operation = ref<'generate' | 'save' | 'read' | 'rewrite'>()
 const partial = ref('')
 const error = ref('')
+const draftHeading = ref<HTMLHeadingElement>()
 const editor = ref<HTMLTextAreaElement>()
 const selection = ref({ start: 0, end: 0 })
 const maxRewriteSelection = 6000
@@ -52,13 +63,13 @@ let abort: AbortController | undefined
 let retry: { signature: string; request: GenerationRequest } | undefined
 
 const busy = computed(() => operation.value !== undefined)
+const showEditor = computed(() => projectId !== null || !!draft.value || manualEditor.value || operation.value === 'generate')
 const latest = computed(() => draft.value?.currentVersion.version.id ?? null)
 const showingOld = computed(() => !!version.value && version.value.version.id !== latest.value)
 const changed = computed(() => content.value !== (version.value?.content ?? ''))
 const hasUnsavedInput = computed(() => {
   if (projectId !== null) return false
-  const saved = draft.value?.currentVersion.writingInput ?? defaultInput
-  return Object.entries(input()).some(([key, value]) => value !== saved[key as keyof WritingInput])
+  return brief.value.trim() !== briefFromInput(draft.value?.currentVersion.writingInput ?? defaultInput)
 })
 const hasSelection = computed(() => !!content.value.slice(selection.value.start, selection.value.end).trim())
 const selectionLength = computed(() => selection.value.end - selection.value.start)
@@ -76,16 +87,39 @@ const rewriteLabels: Record<RewriteAction, string> = { POLISH: '润色', SHORTEN
 watch(busy, value => emit('busy', value))
 watch([changed, hasUnsavedInput], ([edited, typed]) => emit('dirty', edited || typed))
 
-function input(): WritingInput {
-  const duration = typeof form.durationSeconds === 'number' ? form.durationSeconds : defaultInput.durationSeconds
+function selectExpert(value: unknown) {
+  const option = writingExperts.find(candidate => candidate.name === value)
+  if (option) expert.value = option
+}
+
+function briefFromInput(input: WritingInput) {
+  // A long brief is saved in full as background, including its opening topic.
+  const topic = input.topic ?? ''
+  const background = input.background ?? ''
+  if (background.startsWith(topic)) return background
+  return [topic, background].filter(Boolean).join('\n\n')
+}
+
+function setWritingInput(input: WritingInput) {
+  referenceInput.value = input
+  brief.value = briefFromInput(input)
+}
+
+function writingInput(): WritingInput {
+  const text = brief.value.trim()
+  const source = referenceInput.value
+  const longBrief = text.length > maxTopicLength
+  const params = text === briefFromInput(source) ? source : {
+    ...defaultInput,
+    topic: longBrief ? contextSlice(text, 0, maxTopicLength).split('\n', 1)[0].trimEnd() : text,
+    background: longBrief ? text : '',
+  }
   return {
-    ...form,
-    topic: form.topic.trim(),
-    angle: form.angle.trim(),
-    audience: form.audience.trim(),
-    tone: form.tone.trim(),
-    durationSeconds: form.format === 'TALK' ? duration : null,
-    background: form.background.trim(),
+    ...params,
+    // The existing writing API includes the angle in the instructions sent to the model.
+    angle: writingExpertPrompt(expert.value),
+    format: 'ARTICLE',
+    durationSeconds: null,
   }
 }
 
@@ -102,12 +136,12 @@ function setDraft(next: Manuscript | null) {
 }
 
 async function generate(kind: 'WRITE' | 'REGENERATE' = 'WRITE') {
-  if (projectId !== null || busy.value || !props.model.available || showingOld.value) return
+  if (projectId !== null || busy.value || showingOld.value) return
   if (changed.value) {
     error.value = '先保存当前编辑，再生成新版本。'
     return
   }
-  const requestInput = kind === 'WRITE' ? input() : undefined
+  const requestInput = kind === 'WRITE' ? writingInput() : undefined
   const signature = JSON.stringify({ kind, baseVersionId: latest.value, writingInput: requestInput })
   const request: GenerationRequest = retry?.signature === signature ? retry.request : {
     requestId: crypto.randomUUID(), kind, conversationId: conversationId.value,
@@ -118,6 +152,7 @@ async function generate(kind: 'WRITE' | 'REGENERATE' = 'WRITE') {
   partial.value = ''
   error.value = ''
   mode.value = 'preview'
+  void nextTick(() => draftHeading.value?.scrollIntoView({ block: 'nearest' }))
   const controller = new AbortController()
   abort = controller
   try {
@@ -133,6 +168,7 @@ async function generate(kind: 'WRITE' | 'REGENERATE' = 'WRITE') {
       const saved = await api<DraftVersion>('/api/drafts/' + draft.value.id + '/versions/' + result.versionId)
       showVersion(saved)
     }
+    if (requestInput && version.value?.writingInput) setWritingInput(version.value.writingInput)
     retry = undefined
     emit('saved')
   } catch (failure) {
@@ -149,26 +185,10 @@ async function generate(kind: 'WRITE' | 'REGENERATE' = 'WRITE') {
   }
 }
 
-async function findIdeas() {
-  if (busy.value || !props.model.available) return
-  operation.value = 'ideas'
-  error.value = ''
-  try {
-    const result = await api<{ ideas: TopicIdea[] }>('/api/writing/ideas', jsonBody(input()))
-    ideas.value = result.ideas
-  } catch (failure) {
-    error.value = errorMessage(failure)
-  } finally {
-    operation.value = undefined
-  }
-}
-
-function chooseIdea(idea: TopicIdea) {
-  if (busy.value || showingOld.value) return
-  form.topic = idea.title
-  form.angle = idea.angle
-  if (!form.audience.trim()) form.audience = idea.audience
-  void generate()
+function openEditor() {
+  manualEditor.value = true
+  mode.value = 'edit'
+  void nextTick(() => editor.value?.focus())
 }
 
 async function save() {
@@ -215,7 +235,7 @@ function readSelection() {
 }
 
 function startRewrite(action: RewriteAction) {
-  if (busy.value || !props.model.available || !draft.value || showingOld.value
+  if (busy.value || !draft.value || showingOld.value
     || !hasSelection.value || selectionTooLong.value) return
   const { start, end } = selection.value
   rewrite.value = { action, start, end, document: content.value, tone: '', result: null, error: '' }
@@ -299,81 +319,51 @@ onBeforeUnmount(() => abort?.abort())
 </script>
 
 <template>
-  <section class="write-pane">
-    <div class="page-heading">
-      <h1>{{ projectId === null ? '写稿' : initial?.conversation.title }}</h1>
-      <p v-if="projectId === null">输入一个主题，或让助手替你选题。也可以直接在稿件区动笔。</p>
-      <t-button v-else variant="text" size="small" @click="emit('project', projectId)">返回人物项目</t-button>
-    </div>
-    <t-alert v-if="!model.available" theme="info" :message="model.message ?? '模型尚未就绪。'" />
-    <t-alert v-if="error" theme="warning" :message="error" close @close="error = ''" />
-    <div class="writing-grid" :class="{ 'project-writing': projectId !== null }">
-      <div v-if="projectId === null" class="setup-column">
-        <t-card class="work-card">
-          <h2>稿件设置</h2>
-          <t-radio-group v-model="form.format" variant="outline" class="format-switch" aria-label="稿件文体"
-            :disabled="busy">
-            <t-radio-button value="TALK">短视频口播</t-radio-button>
-            <t-radio-button value="ARTICLE">图文稿</t-radio-button>
-          </t-radio-group>
-          <div class="field">
-            <label for="topic">主题 <span>选填</span></label>
-            <t-textarea v-field-id="'topic'" v-model="form.topic" placeholder="例如，第一次拍口播，怎么讲得自然一点？"
-              :autosize="{ minRows: 3, maxRows: 5 }" :maxlength="300" :disabled="busy" />
-          </div>
-          <div class="field">
-            <label for="angle">切入角度 <span>选填</span></label>
-            <t-textarea v-field-id="'angle'" v-model="form.angle" placeholder="例如，从开口的第一句话讲起"
-              :autosize="{ minRows: 1, maxRows: 4 }" :maxlength="500" :disabled="busy" />
-          </div>
-          <t-collapse class="writing-options" borderless>
-            <t-collapse-panel header="受众、语气和参考资料">
-              <div class="field">
-                <label for="audience">目标受众</label>
-                <t-input v-field-id="'audience'" v-model="form.audience" placeholder="例如，刚开始出镜的创作者"
-                  :maxlength="120" :disabled="busy" />
-              </div>
-              <div class="field">
-                <label for="tone">语气</label>
-                <t-input v-field-id="'tone'" v-model="form.tone" placeholder="例如，像跟朋友分享一个方法"
-                  :maxlength="120" :disabled="busy" />
-              </div>
-              <div v-if="form.format === 'TALK'" class="field">
-                <label for="duration">口播时长（秒）</label>
-                <t-input-number v-field-id="'duration'" v-model="form.durationSeconds" :min="15" :max="600" :step="15"
-                  :disabled="busy" />
-              </div>
-              <div class="field">
-                <label for="background">参考资料</label>
-                <t-textarea v-field-id="'background'" v-model="form.background" placeholder="粘贴希望用到的事实或文字素材"
-                  :maxlength="12000" :autosize="{ minRows: 3, maxRows: 6 }" :disabled="busy" />
-              </div>
-            </t-collapse-panel>
-          </t-collapse>
-          <div class="setup-actions">
-            <t-button size="large" block :loading="operation === 'generate'"
-              :disabled="busy || showingOld || !model.available" @click="generate()">
-              {{ form.topic.trim() ? '按题生成' : '替我选题并写一篇' }}
-            </t-button>
-            <t-button size="large" block variant="outline" :loading="operation === 'ideas'"
-              :disabled="busy || showingOld || !model.available" @click="findIdeas">先看三个方向</t-button>
-          </div>
-        </t-card>
-        <t-card v-if="ideas.length" class="work-card">
-          <h2>选题方向</h2>
-          <article v-for="idea in ideas" :key="idea.title" class="idea-row">
-            <h3>{{ idea.title }}</h3>
-            <p>{{ idea.angle }}</p>
-            <p class="secondary-text">受众 · {{ idea.audience }}</p>
-            <p class="secondary-text">收获 · {{ idea.takeaway }}</p>
-            <t-button size="small" variant="text" :disabled="busy || showingOld" @click="chooseIdea(idea)">用这个选题写稿</t-button>
-          </article>
-        </t-card>
+  <section class="write-pane" :class="{ 'expert-writing': projectId === null }">
+    <template v-if="projectId === null">
+      <t-button class="writer-back" variant="text" theme="default" size="small" @click="emit('experts')">
+        <template #icon><ArrowLeftIcon /></template>
+        专家库
+      </t-button>
+      <div class="page-heading writer-heading">
+        <t-avatar size="large" aria-hidden="true">
+          <template #icon><component :is="expert.icon" /></template>
+        </t-avatar>
+        <div>
+          <h1>{{ expert.name }}</h1>
+          <p>{{ expert.description }}</p>
+        </div>
       </div>
+    </template>
+    <div v-else class="page-heading">
+      <h1>{{ initial?.conversation.title }}</h1>
+      <t-button variant="text" size="small" @click="emit('project', projectId)">返回人物项目</t-button>
+    </div>
+    <div v-if="projectId === null" class="expert-panel">
+      <t-card class="work-card" body-class-name="expert-composer">
+        <label class="sr-only" for="writing-brief">写作要求或素材</label>
+        <t-textarea v-field-id="'writing-brief'" v-model="brief" :placeholder="expert.example"
+          :autosize="{ minRows: 4, maxRows: 9 }" :maxlength="maxBriefLength" :readonly="busy || showingOld" />
+        <div class="expert-actions">
+          <div class="expert-select">
+            <label class="sr-only" for="writer-expert">切换专家</label>
+            <t-select v-field-id="'writer-expert'" :options="expertOptions" :value="expert.name"
+              :disabled="busy || showingOld" @change="selectExpert" />
+          </div>
+          <div class="writer-submit">
+            <t-button v-if="!showEditor" variant="text" theme="default" @click="openEditor">自己写</t-button>
+            <t-button :loading="operation === 'generate'" :disabled="busy || showingOld"
+              @click="generate()">开始生成</t-button>
+          </div>
+        </div>
+      </t-card>
+    </div>
+    <t-alert v-if="error" theme="warning" :message="error" close @close="error = ''" />
+    <div v-if="showEditor" class="writing-grid" :class="{ 'project-writing': projectId !== null }">
       <t-card class="work-card editor-card" body-class-name="editor-body" :aria-busy="busy">
         <div class="editor-heading">
           <div>
-            <h2>稿件</h2>
+            <h2 ref="draftHeading">稿件</h2>
             <span class="secondary-text">{{ showingOld ? '查看旧版' : changed ? '有未保存的修改' : draft ? '已保存' : '未保存' }}</span>
           </div>
           <label v-if="versionOptions.length" class="sr-only" for="draft-version">查看稿件版本</label>
@@ -404,7 +394,7 @@ onBeforeUnmount(() => abort?.abort())
             {{ selectionTooLong ? `已选 ${selectionLength} 个字符，单次最多改写 ${maxRewriteSelection} 个。` : '改写选中内容' }}
           </span>
           <t-button v-for="(label, action) in rewriteLabels" :key="action" size="small" variant="outline"
-            :disabled="busy || !model.available || selectionTooLong" @click="startRewrite(action)">{{ label }}</t-button>
+            :disabled="busy || selectionTooLong" @click="startRewrite(action)">{{ label }}</t-button>
         </div>
         <div class="editor-footer">
           <t-button v-if="operation === 'generate'" variant="outline" @click="abort?.abort()">停止</t-button>
@@ -412,7 +402,8 @@ onBeforeUnmount(() => abort?.abort())
             <t-button v-if="!showingOld" :loading="operation === 'save'"
               :disabled="busy || !changed || !content.trim()" @click="save">保存版本</t-button>
             <t-button v-if="projectId === null && !showingOld && version?.writingInput" variant="outline"
-              :disabled="busy || !model.available" @click="generate('REGENERATE')">重新生成</t-button>
+              title="按该版保存的要求重新生成"
+              :disabled="busy" @click="generate('REGENERATE')">重新生成</t-button>
             <t-button variant="text" theme="default" :disabled="!content.trim() || busy" @click="copy">复制</t-button>
             <t-link v-if="exportHref" :href="exportHref" theme="primary" title="导出所选的已保存版本">
               导出 Markdown

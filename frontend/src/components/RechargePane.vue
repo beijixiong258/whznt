@@ -3,18 +3,12 @@ import { onMounted, ref, watch } from 'vue'
 import { Card as TCard, Link as TLink, Upload as TUpload } from 'tdesign-vue-next'
 import type { UploadFile } from 'tdesign-vue-next'
 import { api, errorMessage } from '../api'
+import { currency, dates, rechargeLabels, rechargeThemes, type RechargeOrder } from '../recharge'
 
 interface RechargeSettings {
   qrAvailable: boolean
   presets: number[]
-}
-
-interface RechargeOrder {
-  id: number
-  number: string
-  amount: number
-  note: string
-  submittedAt: string
+  points: number
 }
 
 const props = defineProps<{ active: boolean }>()
@@ -27,8 +21,6 @@ const accepted = ref<RechargeOrder>()
 const loading = ref(false)
 const submitting = ref(false)
 const error = ref('')
-const formatter = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' })
-const dates = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' })
 const requestKey = ref<string>()
 const qrUrl = '/api/recharge/qr'
 
@@ -89,11 +81,12 @@ watch(() => props.active, value => { if (value) void load() })
   <section class="utility-pane">
     <div class="page-heading">
       <h1>充值申请</h1>
+      <p v-if="settings">积分余额 {{ settings.points.toLocaleString('zh-CN') }}</p>
     </div>
     <t-alert v-if="error" theme="error" :message="error" />
     <t-alert v-if="accepted" theme="success" title="申请已提交" :message="'申请编号 ' + accepted.number" />
     <div class="utility-grid recharge-grid">
-      <t-card title="提交充值申请" :bordered="true">
+      <t-card title="提交充值申请">
         <t-loading v-if="loading && !settings" text="读取收款信息" />
         <template v-else-if="settings">
           <t-alert v-if="!settings.qrAvailable" theme="info" message="收款二维码尚未配置，配置后即可提交。" />
@@ -110,7 +103,7 @@ watch(() => props.active, value => { if (value) void load() })
             </t-form-item>
             <div v-if="settings.qrAvailable" class="payment-code">
               <img :src="qrUrl" alt="收款二维码" width="168" height="168">
-              <p class="secondary-text">扫码支付 {{ formatter.format(amount || 0) }} 后，上传付款截图。</p>
+              <p class="secondary-text">扫码支付 {{ currency.format(amount || 0) }} 后，上传付款截图。管理员核对后会手动入账。</p>
             </div>
             <t-form-item label="付款截图" required-mark>
               <t-upload v-model="receipts" :auto-upload="false" :max="1" accept=".png,.jpg,.jpeg"
@@ -124,16 +117,18 @@ watch(() => props.active, value => { if (value) void load() })
           </t-form>
         </template>
       </t-card>
-      <t-card title="我的申请记录" :bordered="true">
+      <t-card title="我的申请记录">
         <p v-if="!orders.length" class="secondary-text">暂无充值申请。</p>
         <div v-for="order in orders" :key="order.id" class="utility-row">
           <div>
-            <strong>{{ formatter.format(order.amount) }}</strong>
+            <strong>{{ currency.format(order.amount) }}</strong>
+            <strong v-if="order.creditedPoints !== null"> · +{{ order.creditedPoints.toLocaleString('zh-CN') }} 积分</strong>
             <p class="secondary-text">{{ dates.format(new Date(order.submittedAt)) }}</p>
             <p class="secondary-text order-number">{{ order.number }}</p>
             <p v-if="order.note" class="secondary-text">{{ order.note }}</p>
+            <p v-if="order.reviewNote" class="secondary-text">{{ order.reviewNote }}</p>
           </div>
-          <t-tag theme="success" variant="light">已提交</t-tag>
+          <t-tag :theme="rechargeThemes[order.state]" variant="light">{{ rechargeLabels[order.state] }}</t-tag>
           <t-link :href="'/api/recharge/orders/' + order.id + '/receipt'" target="_blank" theme="primary">查看截图</t-link>
         </div>
       </t-card>

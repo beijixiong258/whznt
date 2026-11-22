@@ -185,15 +185,13 @@ onBeforeUnmount(() => window.clearInterval(poll))
 <template>
   <section class="utility-pane">
     <div class="page-heading project-heading">
-      <h1>视频字幕</h1>
+      <h1>给视频加字幕</h1>
       <t-button v-if="current" variant="outline" :disabled="operating"
-        @click="changeTask(begin)">新建字幕任务</t-button>
+        @click="changeTask(begin)">上传新视频</t-button>
     </div>
     <t-alert v-if="error || refreshError" theme="error" :message="error || refreshError" />
-    <div class="utility-grid">
-      <t-card title="字幕任务" :bordered="true">
-        <t-loading v-if="loading && !all.length" text="读取任务" />
-        <p v-else-if="!all.length" class="secondary-text">上传第一个视频后，任务会出现在这里。</p>
+    <div class="utility-grid" :class="{ 'subtitle-first-upload': !all.length }">
+      <t-card v-if="all.length" title="处理过的视频">
         <div v-for="task in all" :key="task.id" class="utility-row">
           <div>
             <strong>{{ task.name }}</strong>
@@ -207,7 +205,7 @@ onBeforeUnmount(() => window.clearInterval(poll))
         </div>
       </t-card>
 
-      <t-card v-if="!current" title="新建字幕任务" :bordered="true">
+      <t-card v-if="!current" title="上传视频">
         <t-form class="utility-form" :data="{ mode, script }" label-align="top" @submit="create">
           <t-form-item label="口播视频" required-mark>
             <t-upload v-model="videos" :auto-upload="false" :max="1" accept=".mp4"
@@ -239,7 +237,7 @@ onBeforeUnmount(() => window.clearInterval(poll))
       <SubtitleEditor v-else-if="current.task.state === 'READY'" :key="current.task.id" :detail="current"
         @changed="apply" @edit-state="editorState = $event" />
 
-      <t-card v-else :title="current.task.name" :bordered="true">
+      <t-card v-else :title="current.task.name">
         <t-alert v-if="current.task.state === 'FAILED'" theme="error" :message="current.error" />
         <p v-else class="secondary-text">{{ stateLabels[current.task.state] }}，可以返回工作台继续写稿。</p>
         <t-button v-if="current.task.state === 'FAILED'" class="task-action" :loading="busy" @click="retry">重新识别</t-button>
