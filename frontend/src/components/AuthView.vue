@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { Link as TLink } from 'tdesign-vue-next'
 import { api, errorMessage, jsonBody } from '../api'
 import type { Account } from '../types'
+import BackButton from './BackButton.vue'
 
 const props = defineProps<{ admin: boolean; initialError: string }>()
 const emit = defineEmits<{ authenticated: [account: Account] }>()
@@ -60,6 +61,8 @@ async function submit() {
       <h1>{{ admin ? '管理后台' : '用这个的真老牧师了' }}</h1>
     </aside>
     <section class="auth-card">
+      <BackButton v-if="admin" label="返回用户登录" href="/" :disabled="pending" />
+      <BackButton v-else-if="register" label="返回登录" :disabled="pending" @back="switchMode" />
       <h2>{{ admin ? '管理员登录' : register ? '创建个人账号' : '登录工作台' }}</h2>
       <t-form class="auth-form" :data="{ phone, password }" label-align="top" @submit="submit">
         <t-form-item label="手机号" name="phone" for="phone">
@@ -75,12 +78,9 @@ async function submit() {
           {{ register ? '注册并进入工作台' : '登录' }}
         </t-button>
       </t-form>
-      <div class="auth-links">
-        <t-button v-if="!admin" variant="text" theme="primary" :disabled="pending" @click="switchMode">
-          {{ register ? '已有账号，去登录' : '创建账号' }}
-        </t-button>
-        <t-link v-if="admin" href="/">用户登录</t-link>
-        <t-link v-else href="/admin/login">管理员登录</t-link>
+      <div v-if="!admin && !register" class="auth-links">
+        <t-button variant="text" theme="primary" :disabled="pending" @click="switchMode">创建账号</t-button>
+        <t-link href="/admin/login">管理员登录</t-link>
       </div>
     </section>
   </main>

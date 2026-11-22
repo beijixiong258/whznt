@@ -20,7 +20,8 @@ public interface ConversationMapper extends BaseMapper<Conversation> {
 
     @Select("""
             WITH matching AS (
-                SELECT c.id, c.kind, c.title, c.updated_at, c.project_id, d.id AS draft_id, v.content AS draft_content,
+                SELECT c.id, c.kind, c.updated_at, c.project_id, d.id AS draft_id, v.content AS draft_content,
+                       CASE WHEN #{kind} = 'WRITING' THEN coalesce(v.title, c.title) ELSE c.title END AS title,
                        CASE
                            WHEN c.kind = 'CHAT' THEN '通用 AI'
                            WHEN c.project_id IS NOT NULL THEN '人物故事与定位'
@@ -36,11 +37,13 @@ public interface ConversationMapper extends BaseMapper<Conversation> {
                     SELECT CASE WHEN v.writing_input IS JSON OBJECT THEN v.writing_input::json END AS value
                 ) input
                 WHERE c.owner_id = #{ownerId} AND c.deleted_at IS NULL AND project.deleted_at IS NULL
-                  AND strpos(lower(c.title), lower(#{query})) > 0
+                  AND (#{kind} = '' OR c.kind = #{kind})
+                  AND (#{kind} <> 'WRITING' OR v.id IS NOT NULL)
                   AND c.updated_at >= coalesce(#{since}, '-infinity'::timestamptz)
             ), page AS (
                 SELECT * FROM matching
-                WHERE #{assistant} = '' OR assistant = #{assistant}
+                WHERE (#{assistant} = '' OR assistant = #{assistant})
+                  AND strpos(lower(title), lower(#{query})) > 0
                 ORDER BY updated_at DESC, id DESC
                 LIMIT #{limit} OFFSET #{offset}
             )
@@ -57,6 +60,7 @@ public interface ConversationMapper extends BaseMapper<Conversation> {
             @Param("ownerId") long ownerId,
             @Param("query") String query,
             @Param("assistant") String assistant,
+            @Param("kind") String kind,
             @Param("since") OffsetDateTime since,
             @Param("limit") int limit,
             @Param("offset") long offset);

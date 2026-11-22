@@ -48,7 +48,7 @@ record ScriptBudget(int seconds, int target, int minimum, int maximum) {
                 : "用一个具体的通用做法展开现有观点，增加可直接念出的内容。";
         String correction = """
                 上一版实测正文 %d 字。%s 按原始口播规格重写，正文目标 %d 字，范围 %d 至 %d 字。
-                直接交付完整三段。已核对的事实保持原意，引用号紧贴对应事实。结尾是实际要念的最后一句。
+                直接交付完整三段。已核对的事实保持原意。结尾是实际要念的最后一句。
                 """.formatted(words, edit, target, minimum, maximum);
         List<Message> revision = new ArrayList<>(messages);
         revision.add(new AssistantMessage(answer));

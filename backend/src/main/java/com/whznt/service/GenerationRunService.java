@@ -19,6 +19,6 @@ public interface GenerationRunService extends IService<GenerationRun> {
 
     record Prepared(
             GenerationRun run, boolean replay, Long baseVersionId, WritingInput writingInput,
-            String message, List<ChatMessage> history) {
+            String message, String draftToRevise, List<ChatMessage> history) {
     }
 }

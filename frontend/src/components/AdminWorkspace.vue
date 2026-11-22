@@ -9,9 +9,9 @@ import AdminUsers from './AdminUsers.vue'
 defineProps<{ username: string; error: string; loggingOut: boolean }>()
 const emit = defineEmits<{ logout: [] }>()
 const pages = {
-  recharges: { title: '充值记录', icon: WalletIcon, view: AdminRecharge },
-  users: { title: '用户管理', icon: UserIcon, view: AdminUsers },
-  upstream: { title: 'AI 提供商配置', icon: SettingIcon, view: AdminUpstream },
+  recharges: { title: '充值记录', icon: WalletIcon },
+  users: { title: '用户管理', icon: UserIcon },
+  upstream: { title: 'AI 提供商配置', icon: SettingIcon },
 } as const
 type Page = keyof typeof pages
 const current = ref<Page>('recharges')
@@ -50,9 +50,9 @@ function open(page: Page) {
     <main class="admin-content">
       <header class="admin-heading"><h1>{{ pages[current].title }}</h1></header>
       <t-alert v-if="error" class="page-alert" theme="error" :message="error" />
-      <template v-for="(page, id) in pages" :key="id">
-        <component :is="page.view" v-if="opened.has(id)" v-show="current === id" />
-      </template>
+      <AdminRecharge v-if="opened.has('recharges')" v-show="current === 'recharges'" />
+      <AdminUsers v-if="opened.has('users')" v-show="current === 'users'" :operator-name="username" />
+      <AdminUpstream v-if="opened.has('upstream')" v-show="current === 'upstream'" />
     </main>
   </div>
 </template>

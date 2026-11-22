@@ -52,8 +52,9 @@ public class GenerationRunServiceImpl extends ServiceImpl<GenerationRunMapper, G
 
         boolean chat = request.kind() == GenerationRun.Kind.CHAT;
         boolean regenerate = request.kind() == GenerationRun.Kind.REGENERATE;
+        boolean revise = regenerate && request.message() != null && !request.message().isBlank();
         Conversation.Kind kind = chat ? Conversation.Kind.CHAT : Conversation.Kind.WRITING;
-        String message = chat ? requireMessage(request.message()) : null;
+        String message = chat || revise ? requireMessage(request.message()) : null;
         WritingInput input = chat ? null : WritingInput.normalized(request.writingInput());
         if (regenerate && (request.conversationId() == null || request.baseVersionId() == null)) {
             throw WorkspaceException.badRequest("请打开要重新生成的稿件版本。");
@@ -80,21 +81,23 @@ public class GenerationRunServiceImpl extends ServiceImpl<GenerationRunMapper, G
         }
 
         List<ChatMessage> history = List.of();
+        String draftToRevise = null;
         if (chat) {
             history = messages.recent(conversationId);
         } else {
             DraftVersion base = drafts.requireCurrent(conversationId, request.baseVersionId());
             if (regenerate) {
                 input = versions.originalInput(base);
-                if (input == null) {
+                if (input == null && !revise) {
                     throw WorkspaceException.badRequest("这篇稿件没有可复用的生成参数，请按题写一版。");
                 }
+                if (revise) draftToRevise = base.getContent();
             }
         }
 
         run.setConversationId(conversationId);
         updateById(run);
-        return new Prepared(run, false, request.baseVersionId(), input, message, history);
+        return new Prepared(run, false, request.baseVersionId(), input, message, draftToRevise, history);
     }
 
     @Override
@@ -135,7 +138,7 @@ public class GenerationRunServiceImpl extends ServiceImpl<GenerationRunMapper, G
         return switch (run.getState()) {
             case COMPLETED -> {
                 conversations.requireOwned(run.getOwnerId(), run.getConversationId());
-                yield new Prepared(run, true, null, null, null, List.of());
+                yield new Prepared(run, true, null, null, null, null, List.of());
             }
             case RUNNING -> throw WorkspaceException.conflict("这次生成仍在进行，请稍后再查看。");
             case FAILED -> throw WorkspaceException.conflict("这次生成已失败，请重新发起。");

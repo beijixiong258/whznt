@@ -102,11 +102,13 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
     @Transactional
     public AdminViews.User updateUser(long id, AdminRequests.UpdateUser input) {
         Account account = ordinaryUser(baseMapper.lock(id));
-        String phone = validPhone(input.phone());
-        if (account.isEnabled() != input.enabled() || !account.getPhone().equals(phone) || input.password() != null) {
-            account.setAuthVersion(account.getAuthVersion() + 1);
+        String phone = input.phone() == null ? account.getPhone() : validPhone(input.phone());
+        boolean enabled = input.enabled() == null ? account.isEnabled() : input.enabled();
+        if (account.isEnabled() == enabled && account.getPhone().equals(phone) && input.password() == null) {
+            return AdminViews.User.from(account);
         }
-        account.setEnabled(input.enabled());
+        account.setAuthVersion(account.getAuthVersion() + 1);
+        account.setEnabled(enabled);
         account.setPhone(phone);
         if (input.password() != null) account.setPasswordHash(encodePassword(input.password()));
         try {
@@ -120,11 +122,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
     @Override
     @Transactional
     public void disableUser(long id) {
-        Account account = ordinaryUser(baseMapper.lock(id));
-        if (!account.isEnabled()) return;
-        account.setEnabled(false);
-        account.setAuthVersion(account.getAuthVersion() + 1);
-        updateById(account);
+        updateUser(id, new AdminRequests.UpdateUser(null, null, false));
     }
 
     @Override

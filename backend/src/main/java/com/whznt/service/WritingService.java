@@ -49,10 +49,19 @@ public class WritingService {
 
         return Flux.defer(() -> {
             boolean chat = run.getKind() == GenerationRun.Kind.CHAT;
-            List<Message> messages = chat
-                    ? prompts.chat(work.history(), work.message()) : prompts.write(work.writingInput());
-            ScriptBudget budget = !chat && work.writingInput().format() == WritingInput.Format.TALK
-                    ? ScriptBudget.forSeconds(work.writingInput().durationSeconds()) : null;
+            boolean revising = work.draftToRevise() != null;
+            WritingInput input = work.writingInput();
+            WritingInput.Format format = input == null ? WritingInput.Format.ARTICLE : input.format();
+            List<Message> messages;
+            if (chat) {
+                messages = prompts.chat(work.history(), work.message());
+            } else if (revising) {
+                messages = prompts.revise(input, work.draftToRevise(), work.message());
+            } else {
+                messages = prompts.write(input);
+            }
+            ScriptBudget budget = !chat && !revising && format == WritingInput.Format.TALK
+                    ? ScriptBudget.forSeconds(input.durationSeconds()) : null;
             int tokenBudget = budget == null ? 4096 : budget.tokenLimit();
             StringBuilder text = new StringBuilder();
             Flux<ServerSentEvent<WorkspaceViews.GenerationEvent>> deltas = client.stream(messages, tokenBudget, 0.65)
@@ -63,7 +72,7 @@ public class WritingService {
             Mono<ServerSentEvent<WorkspaceViews.GenerationEvent>> complete = Mono.fromCallable(() -> {
                 String answer = usableContent(text.toString());
                 if (!chat) {
-                    answer = validateDraft(answer, work.writingInput().format());
+                    answer = validateDraft(answer, format);
                 }
                 if (budget != null) {
                     int words = ScriptBudget.countWords(answer);
@@ -119,7 +128,7 @@ public class WritingService {
     private static String validateDraft(String response, WritingInput.Format format) {
         String content = stripFence(response);
         if (!TITLE.matcher(content).lookingAt()) {
-            throw new WorkspaceException(HttpStatus.BAD_GATEWAY, "模型返回的稿件缺少标题或正文，请重新生成。");
+            throw new WorkspaceException(HttpStatus.BAD_GATEWAY, "模型返回的稿件缺少标题或正文，请再试一次。");
         }
         if (format == WritingInput.Format.TALK) {
             var sections = TALK_SECTION.matcher(content);
@@ -135,7 +144,7 @@ public class WritingService {
                 throw invalidTalk();
             }
         } else if (!hasBody(content)) {
-            throw new WorkspaceException(HttpStatus.BAD_GATEWAY, "模型返回的图文稿缺少正文，请重新生成。");
+            throw new WorkspaceException(HttpStatus.BAD_GATEWAY, "模型返回的图文稿缺少正文，请再试一次。");
         }
         return content;
     }

@@ -3,11 +3,11 @@ import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { Card as TCard, Link as TLink, MessagePlugin, Tabs as TTabs, TabPanel as TTabPanel, Upload as TUpload } from 'tdesign-vue-next'
 import type { UploadFile } from 'tdesign-vue-next'
 import { api, errorMessage, jsonBody } from '../api'
-import { materialLabels, projectPath } from '../projects'
-import type { MaterialKind, MaterialPassage, MaterialRow, MaterialText } from '../projects'
+import { materialLabels, projectPath, stepLabels } from '../projects'
+import type { Artifact, MaterialKind, MaterialPassage, MaterialRow, MaterialText } from '../projects'
 
-const props = defineProps<{ projectId: number; materials: MaterialRow[] }>()
-const emit = defineEmits<{ changed: [] }>()
+const props = defineProps<{ projectId: number; materials: MaterialRow[]; artifacts: Artifact[] }>()
+const emit = defineEmits<{ changed: []; openResult: [artifact: Artifact] }>()
 const editing = ref(false)
 const mode = ref<'text' | 'file'>('text')
 const updating = ref<MaterialRow | null>(null)
@@ -144,9 +144,19 @@ async function search() {
 
 <template>
   <section class="project-materials">
+    <t-card title="已保存成果">
+      <p v-if="!artifacts.length" class="secondary-text">从「分步创作」生成或录入成果后，就能在这里打开。</p>
+      <div v-for="artifact in artifacts" :key="artifact.id" class="project-row">
+        <div>
+          <b>{{ artifact.currentVersion.title }}</b>
+          <p class="secondary-text">{{ stepLabels[artifact.step] }}</p>
+        </div>
+        <t-button variant="outline" @click="emit('openResult', artifact)">查看成果</t-button>
+      </div>
+    </t-card>
     <div class="project-toolbar">
       <form class="project-search" @submit.prevent="search">
-        <t-input v-model="query" clearable placeholder="搜索当前资料" aria-label="搜索当前资料" :maxlength="120" />
+        <t-input v-model="query" clearable placeholder="搜索原始资料" aria-label="搜索原始资料" :maxlength="120" />
         <t-button type="submit" variant="outline" :loading="fetching" :disabled="!query.trim()">搜索</t-button>
       </form>
       <t-button @click="add()">添加资料</t-button>
@@ -160,7 +170,7 @@ async function search() {
         <t-button size="small" variant="text" @click="focused = hit">查看片段</t-button>
       </div>
     </t-card>
-    <t-card>
+    <t-card title="原始资料">
       <p v-if="!materials.length" class="secondary-text">可以粘贴原文，也可以导入 DOCX、TXT、MD 或文字版 PDF。</p>
       <div v-for="row in materials" :key="row.id" class="project-row">
         <div>

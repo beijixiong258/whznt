@@ -16,7 +16,8 @@ public interface ConversationService extends IService<Conversation> {
 
     Conversation createForProject(long ownerId, long projectId, String title);
 
-    WorkspaceViews.History history(long ownerId, String query, String assistant, OffsetDateTime since, int page);
+    WorkspaceViews.History history(long ownerId, String query, String assistant, Conversation.Kind kind,
+                                   OffsetDateTime since, int page);
 
     WorkspaceViews.ConversationRow rename(long ownerId, long id, String title);
 

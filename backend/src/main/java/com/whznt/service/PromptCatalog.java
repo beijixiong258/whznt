@@ -28,6 +28,7 @@ public class PromptCatalog {
     private final String talk = read("口播稿");
     private final String article = read("图文稿");
     private final String rewrite = read("选段改写");
+    private final String reviseDraft = read("修改整篇稿件");
     private final String chat = read("自由对话");
     private final ObjectMapper json;
 
@@ -52,6 +53,16 @@ public class PromptCatalog {
                 "前文", Objects.toString(request.before(), ""),
                 "选中内容", request.selection(),
                 "后文", Objects.toString(request.after(), "")));
+    }
+
+    public List<Message> revise(WritingInput originalInput, String draft, String instruction) {
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        parameters.put("原稿", draft);
+        parameters.put("修改要求", instruction);
+        if (originalInput != null) {
+            parameters.put("原始写作要求", writingParameters(originalInput));
+        }
+        return pair(reviseDraft, parameters);
     }
 
     public List<Message> chat(List<ChatMessage> history, String input) {

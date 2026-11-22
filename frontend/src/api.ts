@@ -1,4 +1,4 @@
-import type { ConversationDetail, GenerationEvent, GenerationRequest, HistoryPage } from './types'
+import type { ConversationDetail, ConversationKind, GenerationEvent, GenerationRequest, HistoryPage } from './types'
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -33,12 +33,14 @@ export function jsonBody(body: unknown, method = 'POST'): RequestInit {
   }
 }
 
-export function loadConversation(id: number): Promise<ConversationDetail> {
-  return api<ConversationDetail>('/api/conversations/' + id)
+export function loadConversation(id: number, signal?: AbortSignal): Promise<ConversationDetail> {
+  return api<ConversationDetail>('/api/conversations/' + id, { signal })
 }
 
-export function loadConversations(filters: { q?: string; assistant?: string; since?: string; page?: number } = {},
-                                  signal?: AbortSignal): Promise<HistoryPage> {
+export function loadConversations(
+  filters: { q?: string; assistant?: string; kind?: ConversationKind; since?: string; page?: number } = {},
+  signal?: AbortSignal,
+): Promise<HistoryPage> {
   const params = new URLSearchParams()
   for (const [name, value] of Object.entries(filters)) params.set(name, String(value))
   return api<HistoryPage>('/api/conversations?' + params, { signal })

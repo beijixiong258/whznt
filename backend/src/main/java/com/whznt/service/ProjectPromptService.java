@@ -11,6 +11,7 @@ import com.whznt.integration.TextModel;
 import com.whznt.vo.ProjectViews;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -31,6 +32,9 @@ import java.util.stream.Collectors;
 public class ProjectPromptService {
 
     private static final Pattern SENTENCE_BREAK = Pattern.compile("[。！？!?；;\\r\\n]+");
+    private static final Pattern PLACEHOLDERS = Pattern.compile(
+            "(?m)资料不足版|[【（(\\[]\\h*待(?:填充|填写|补充)\\h*[】）)\\]]"
+                    + "|(?:^|[:：])\\h*(?:\\*{1,2}\\h*)?待(?:填充|填写|补充)\\*{0,2}\\h*[。.]?\\h*$");
     private static final Map<ProjectStep, String> PROMPTS = Map.of(
             ProjectStep.TRAITS, PromptCatalog.read("提炼人物特质"),
             ProjectStep.STORY, PromptCatalog.read("写人物故事"),
@@ -79,17 +83,21 @@ public class ProjectPromptService {
         List<Message> messages = List.of(new SystemMessage(prompt), new UserMessage(encode(input)));
         String answer = budget != null
                 ? writeScript(client, messages, budget)
-                : generate(client, messages, plan.step() == ProjectStep.STORY ? 8600 : 3400);
+                : generateComplete(client, messages, plan.step() == ProjectStep.STORY ? 8600 : 3400);
         if (plan.step() == ProjectStep.STORY) {
             answer = reviewStory(client, plan, facts, upstream, answer);
-        }
-        if (plan.step() == ProjectStep.TOPICS && TopicTitles.parse(answer).size() != 10) {
-            throw WorkspaceException.unavailable("模型返回的选题数量不完整，请重新生成。");
         }
         if (ScriptBudget.CITATION.matcher(answer).results().anyMatch(mark -> !allowedIds.contains(mark.group(1)))) {
             throw WorkspaceException.unavailable("模型返回的资料编号无对应原文，请重新生成。");
         }
-        return new ProjectGeneration.Result(answer, client.model());
+        String content = ScriptBudget.CITATION.matcher(answer).replaceAll("").strip();
+        if (content.isEmpty()) {
+            throw WorkspaceException.unavailable("模型没有返回可保存的成果，请重试。");
+        }
+        if (plan.step() == ProjectStep.TOPICS && TopicTitles.parse(content).size() != 10) {
+            throw WorkspaceException.unavailable("模型返回的选题数量不完整，请重新生成。");
+        }
+        return new ProjectGeneration.Result(content, client.model());
     }
 
     private String reviewStory(TextModel.Client client, ProjectGeneration.Plan plan, List<Map<String, Object>> facts,
@@ -97,7 +105,7 @@ public class ProjectPromptService {
         List<Map<String, Object>> supplied = upstream.stream().filter(row -> "手动录入稿".equals(row.get("来源"))).toList();
         Map<String, Object> evidence = Map.of("人物", plan.person(), "人物简介", plan.summary(),
                 "事实片段", facts, "手动录入稿", supplied, "待核稿", draft);
-        String reviewed = generate(client,
+        String reviewed = generateComplete(client,
                 List.of(new SystemMessage(STORY_REVIEW), new UserMessage(encode(evidence))), 8600);
         List<String> originals = new ArrayList<>();
         originals.add(plan.summary());
@@ -107,19 +115,19 @@ public class ProjectPromptService {
         boolean hasBody = story.lines().map(String::stripLeading)
                 .anyMatch(line -> !line.startsWith("#") && ScriptBudget.countWords(line) > 0);
         if (!hasBody) {
-            throw WorkspaceException.unavailable("复核后没有可保留的故事正文，请补充资料后重试。");
+            throw WorkspaceException.unavailable("这次没有写出完整的正文，请重新生成。");
         }
         return story;
     }
 
     private String writeScript(TextModel.Client client, List<Message> messages, ScriptBudget budget) {
         int tokens = budget.tokenLimit();
-        String answer = generate(client, messages, tokens);
+        String answer = generateComplete(client, messages, tokens);
         int words = ScriptBudget.countWords(answer);
         if (!budget.contains(words)) {
             log.info("Rewriting a {}-second script with {} spoken words (expected {}-{})",
                     budget.seconds(), words, budget.minimum(), budget.maximum());
-            answer = generate(client, budget.revision(messages, answer, words), tokens);
+            answer = generateComplete(client, budget.revision(messages, answer, words), tokens);
             words = ScriptBudget.countWords(answer);
             if (!budget.contains(words)) {
                 log.warn("A revised {}-second script has {} spoken words (expected {}-{})",
@@ -136,6 +144,21 @@ public class ProjectPromptService {
             throw WorkspaceException.unavailable("模型没有返回可保存的成果，请重试。");
         }
         return answer;
+    }
+
+    private static String generateComplete(TextModel.Client client, List<Message> messages, int tokens) {
+        String answer = generate(client, messages, tokens);
+        if (!PLACEHOLDERS.matcher(answer).find()) return answer;
+
+        List<Message> completion = new ArrayList<>(messages);
+        completion.add(new AssistantMessage(answer));
+        completion.add(new UserMessage("把初稿的占位项补成完整正文，给出直接可用的名字、句子或示例。"
+                + "使用原来给定的真实信息，线索少时用常见场景或建议补齐。输出改好的完整成品。"));
+        String finished = generate(client, completion, tokens);
+        if (PLACEHOLDERS.matcher(finished).find()) {
+            throw WorkspaceException.unavailable("这次没有写出完整的正文，请重新生成。");
+        }
+        return finished;
     }
 
     private static List<String> styleNotes(List<ProjectViews.Passage> passages) {

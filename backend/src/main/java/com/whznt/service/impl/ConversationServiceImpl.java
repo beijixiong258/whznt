@@ -52,9 +52,10 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
     }
 
     @Override
-    public WorkspaceViews.History history(long ownerId, String query, String assistant, OffsetDateTime since, int page) {
-        List<WorkspaceViews.HistoryItem> rows = baseMapper.findHistory(ownerId, query.strip(), assistant.strip(), since,
-                PAGE_SIZE + 1, (long) (page - 1) * PAGE_SIZE);
+    public WorkspaceViews.History history(long ownerId, String query, String assistant, Conversation.Kind kind,
+                                          OffsetDateTime since, int page) {
+        List<WorkspaceViews.HistoryItem> rows = baseMapper.findHistory(ownerId, query.strip(), assistant.strip(),
+                kind == null ? "" : kind.name(), since, PAGE_SIZE + 1, (long) (page - 1) * PAGE_SIZE);
         return new WorkspaceViews.History(rows.subList(0, Math.min(rows.size(), PAGE_SIZE)), rows.size() > PAGE_SIZE);
     }
 

@@ -26,7 +26,11 @@ const navigation = [
   { id: 'projects', label: '人物故事与定位', icon: UserIcon },
   { id: 'subtitles', label: '给视频加字幕', icon: VideoIcon },
 ] as const
-type Pane = typeof navigation[number]['id'] | 'write' | 'chat' | 'history' | 'recharge'
+const shelves = [
+  { pane: 'history', kind: 'CHAT', label: '历史对话', icon: TimeIcon, itemIcon: ChatIcon },
+  { pane: 'manuscripts', kind: 'WRITING', label: '我的稿件', icon: Edit1Icon, itemIcon: Edit1Icon },
+] as const
+type Pane = typeof navigation[number]['id'] | typeof shelves[number]['pane'] | 'write' | 'chat' | 'recharge'
 
 const props = defineProps<{ account: Account }>()
 const emit = defineEmits<{ logout: []; profile: [account: Account] }>()
@@ -36,17 +40,19 @@ const opened = reactive(new Set<Pane>())
 const writing = ref<ConversationDetail | null>(null)
 const chatting = ref<ConversationDetail | null>(null)
 const writeKey = ref(0)
+const writeBack = ref<'experts' | 'manuscripts'>('experts')
 const initialVersion = ref<number>()
 const initialExpert = shallowRef<WritingExpert>()
 const requestedProject = ref<{ id: number }>()
 const subtitleReference = ref<DraftReference>()
 const chatKey = ref(0)
 const historyRevision = ref(0)
-const recentHistory = ref<ConversationRow[]>([])
+const recent = reactive<Record<ConversationKind, ConversationRow[]>>({ CHAT: [], WRITING: [] })
 const activeIds = reactive<{ write: number | null; chat: number | null }>({ write: null, chat: null })
 let recentRequest: AbortController | undefined
 const dirty = reactive({ write: false, chat: false })
 const busy = reactive({ write: false, chat: false })
+const projectEditState = ref({ dirty: false, busy: false })
 const subtitleState = ref({ dirty: false, busy: false })
 const alert = ref('')
 const opening = ref(false)
@@ -55,19 +61,20 @@ const historyAction = ref<{ kind: ConversationAction; row: ConversationRow } | n
 const historyTitle = ref('')
 const historyError = ref('')
 const savingHistory = ref(false)
+const historyActionLabel = computed(() => {
+  if (historyAction.value?.row.kind === 'WRITING') return '移除稿件'
+  return historyAction.value?.kind === 'rename' ? '重命名对话' : '删除对话'
+})
 const editingUsername = ref(false)
 const username = ref('')
 const usernameError = ref('')
 const savingUsername = ref(false)
 
 const phoneLabel = computed(() => props.account.phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1 **** $2'))
-const anyBusy = computed(() => busy.write || busy.chat)
+const anyBusy = computed(() => busy.write || busy.chat || projectEditState.value.busy)
 const activeConversation = computed(() => pane.value === 'write' || pane.value === 'chat' ? activeIds[pane.value] : null)
-const hasUnsavedChanges = computed(() => dirty.write || dirty.chat || subtitleState.value.dirty)
-const selectedMenu = computed(() => {
-  if (pane.value !== 'write') return pane.value
-  return writing.value?.conversation.projectId ? 'projects' : 'experts'
-})
+const hasUnsavedChanges = computed(() => dirty.write || dirty.chat || projectEditState.value.dirty || subtitleState.value.dirty)
+const selectedMenu = computed(() => pane.value === 'write' ? writeBack.value : pane.value)
 
 function openPane(next: Pane) {
   opened.add(next)
@@ -80,8 +87,14 @@ async function loadRecentHistory() {
   const request = new AbortController()
   recentRequest = request
   try {
-    const result = await loadConversations({}, request.signal)
-    if (!request.signal.aborted) recentHistory.value = result.items.slice(0, 6)
+    const [chats, drafts] = await Promise.all([
+      loadConversations({ kind: 'CHAT' }, request.signal),
+      loadConversations({ kind: 'WRITING' }, request.signal),
+    ])
+    if (!request.signal.aborted) {
+      recent.CHAT = chats.items.slice(0, 6)
+      recent.WRITING = drafts.items.slice(0, 6)
+    }
   } catch {
     // The history page reports request failures and offers a fresh search.
   } finally {
@@ -133,6 +146,7 @@ function startNew(kind: 'write' | 'chat', expert?: WritingExpert) {
 function resetConversation(kind: 'write' | 'chat', expert?: WritingExpert) {
   if (kind === 'write') {
     writing.value = null
+    writeBack.value = 'experts'
     initialVersion.value = undefined
     initialExpert.value = expert
     writeKey.value++
@@ -147,8 +161,12 @@ function resetConversation(kind: 'write' | 'chat', expert?: WritingExpert) {
 function openHistory(id: number, kind: ConversationKind, version?: number) {
   const target = kind === 'WRITING' ? 'write' : 'chat'
   whileIdle(() => {
-    if (id === activeIds[target] && version === undefined) openPane(target)
-    else confirmDiscard(target, () => void openConversation(id, version))
+    if (id === activeIds[target] && version === undefined) {
+      if (target === 'write') writeBack.value = 'manuscripts'
+      openPane(target)
+    } else {
+      confirmDiscard(target, () => void openConversation(id, version))
+    }
   })
 }
 
@@ -184,9 +202,9 @@ async function saveHistoryAction() {
       const target = action.row.kind === 'WRITING' ? 'write' : 'chat'
       if (activeIds[target] === action.row.id) {
         resetConversation(target)
-        if (pane.value === target) openPane('chat')
+        if (pane.value === target) openPane(target === 'write' ? 'manuscripts' : 'chat')
       }
-      void MessagePlugin.success('已删除对话')
+      void MessagePlugin.success(target === 'write' ? '已移除稿件' : '已删除对话')
     }
     historyAction.value = null
     refreshHistory()
@@ -251,6 +269,7 @@ async function openConversation(id: number, version?: number) {
     const detail = await loadConversation(id)
     if (detail.conversation.kind === 'WRITING') {
       writing.value = detail
+      writeBack.value = 'manuscripts'
       activeIds.write = id
       initialVersion.value = version
       initialExpert.value = undefined
@@ -315,22 +334,24 @@ onMounted(() => void loadRecentHistory())
           </t-menu-item>
         </t-menu>
       </nav>
-      <section class="rail-history" aria-label="最近对话">
-        <t-button class="rail-history-link" size="small" variant="text" block :theme="pane === 'history' ? 'primary' : 'default'"
-          aria-label="历史对话" title="历史对话" :aria-current="pane === 'history' ? 'page' : undefined" @click="openPane('history')">
-          <span class="rail-label">历史对话</span>
-          <TimeIcon />
+      <section v-for="shelf in shelves" :key="shelf.pane" class="rail-history" :aria-label="shelf.label">
+        <t-button class="rail-history-link" size="small" variant="text" block :theme="selectedMenu === shelf.pane ? 'primary' : 'default'"
+          :aria-label="shelf.label" :title="shelf.label" :aria-current="selectedMenu === shelf.pane ? 'page' : undefined"
+          @click="openPane(shelf.pane)">
+          <span class="rail-label">{{ shelf.label }}</span>
+          <component :is="shelf.icon" />
         </t-button>
-        <div v-if="recentHistory.length" class="rail-recent">
-          <div v-for="row in recentHistory" :key="row.id" class="rail-recent-row"
+        <div v-if="recent[shelf.kind].length" class="rail-recent">
+          <div v-for="row in recent[shelf.kind]" :key="row.id" class="rail-recent-row"
             :class="{ 'rail-recent-active': activeConversation === row.id }">
             <t-button class="rail-recent-item" variant="text" theme="default" size="small" block
               :disabled="opening" :title="row.title" :aria-current="activeConversation === row.id ? 'true' : undefined"
               @click="openHistory(row.id, row.kind)">
-              <template #icon><Edit1Icon v-if="row.kind === 'WRITING'" /><ChatIcon v-else /></template>
+              <template #icon><component :is="shelf.itemIcon" /></template>
               <span>{{ row.title }}</span>
             </t-button>
-            <ConversationActions :title="row.title" :disabled="opening" @action="openHistoryAction($event, row)" />
+            <ConversationActions :title="row.title" :disabled="opening" :draft="shelf.kind === 'WRITING'"
+              @action="openHistoryAction($event, row)" />
           </div>
         </div>
       </section>
@@ -369,16 +390,20 @@ onMounted(() => void loadRecentHistory())
           :can-resume="dirty.write || busy.write" @select="startNew('write', $event)"
           @chat="startNew('chat')" @resume="openPane('write')" />
         <WritePane v-show="pane === 'write'" :key="writeKey" :initial="writing" :initial-version="initialVersion"
-          :initial-expert="initialExpert" @experts="openPane('experts')"
+          :initial-expert="initialExpert" :back-label="writeBack === 'manuscripts' ? '返回我的稿件' : undefined"
+          @experts="openPane('experts')" @back="openPane('manuscripts')"
           @saved="onSaved('write', $event)" @dirty="dirty.write = $event" @busy="busy.write = $event"
-          @project="openProjects" @upstream="(id, version) => openHistory(id, 'WRITING', version)" @subtitle="openSubtitles" />
+          @project="openProjects" @subtitle="openSubtitles" />
         <ChatPane v-show="pane === 'chat'" :key="chatKey" :initial="chatting" :username="account.username"
           @saved="onSaved('chat', $event)" @dirty="dirty.chat = $event" @busy="busy.chat = $event" />
         <HistoryPane v-if="opened.has('history')" v-show="pane === 'history'" :revision="historyRevision" :opening="opening"
-          @open="openHistory" @action="openHistoryAction" @back="openPane('chat')" @new-chat="startNew('chat')" />
+          kind="CHAT" @open="openHistory" @action="openHistoryAction" @back="openPane('chat')" @create="startNew('chat')" />
+        <HistoryPane v-if="opened.has('manuscripts')" v-show="pane === 'manuscripts'"
+          :revision="historyRevision" :opening="opening" kind="WRITING" @open="openHistory" @action="openHistoryAction"
+          @back="openPane('experts')" @create="openPane('experts')" />
         <ProjectsPane v-if="opened.has('projects')" v-show="pane === 'projects'" :active="pane === 'projects'"
-          :requested-project="requestedProject" @open="(id, version) => openHistory(id, 'WRITING', version)"
-          @deleted="projectDeleted" @history-changed="refreshHistory" />
+          :requested-project="requestedProject" @deleted="projectDeleted" @history-changed="refreshHistory"
+          @edit-state="projectEditState = $event" @subtitle="openSubtitles" />
         <SubtitlePane v-if="opened.has('subtitles')" v-show="pane === 'subtitles'" :active="pane === 'subtitles'"
           :requested-reference="subtitleReference" @edit-state="subtitleState = $event" />
         <RechargePane v-if="opened.has('recharge')" v-show="pane === 'recharge'" :active="pane === 'recharge'" />
@@ -396,9 +421,9 @@ onMounted(() => void loadRecentHistory())
       <p class="secondary-text username-help">最多 10 个汉字或 20 个英文字母。混用时，一个汉字占两位。</p>
       <t-alert v-if="usernameError" theme="error" :message="usernameError" />
     </t-dialog>
-    <t-dialog :visible="historyAction !== null" :header="historyAction?.kind === 'rename' ? '重命名对话' : '删除对话'"
+    <t-dialog :visible="historyAction !== null" :header="historyActionLabel"
       :confirm-btn="{
-        content: historyAction?.kind === 'rename' ? '保存' : '删除',
+        content: historyAction?.kind === 'rename' ? '保存' : historyAction?.row.kind === 'WRITING' ? '移除' : '删除',
         theme: historyAction?.kind === 'rename' ? 'primary' : 'danger',
         loading: savingHistory,
       }"
@@ -410,10 +435,11 @@ onMounted(() => void loadRecentHistory())
           :disabled="savingHistory" @enter="saveHistoryAction" />
       </template>
       <template v-else-if="historyAction">
-        <p class="history-delete-title">删除「{{ historyAction.row.title }}」？</p>
+        <p class="history-delete-title">{{ historyAction.row.kind === 'WRITING' ? '移除' : '删除' }}「{{ historyAction.row.title }}」？</p>
         <p>{{ historyAction.row.projectId
-          ? '这条记录会从历史对话移除，稿件仍可从人物项目打开。'
-          : '这条对话和其中未保存的内容会从工作台移除。' }}</p>
+          ? '稿件将从「我的稿件」移除，可继续从所属人物档案打开。'
+          : historyAction.row.kind === 'WRITING' ? '这份稿件及其版本将从工作台移除。'
+            : '这条对话和其中未保存的内容会从工作台移除。' }}</p>
       </template>
       <t-alert v-if="historyError" theme="error" :message="historyError" />
     </t-dialog>

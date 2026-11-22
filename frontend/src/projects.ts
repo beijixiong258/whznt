@@ -70,11 +70,6 @@ export interface ProjectDetail {
   jobs: ProjectJob[]
 }
 
-export interface Sources {
-  upstream: { step: ProjectStep; conversationId: number; versionId: number; title: string }[]
-  passages: MaterialPassage[]
-}
-
 export const stepLabels: Record<ProjectStep, string> = {
   TRAITS: '提炼个人特质', STORY: '人物故事', POSITION: 'IP 定位', TOPICS: '短视频选题', SCRIPT: '口播稿',
 }

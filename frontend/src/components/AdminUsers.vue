@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next'
-import { Card as TCard, Checkbox as TCheckbox, MessagePlugin, Table as TTable } from 'tdesign-vue-next'
+import { Card as TCard, MessagePlugin, Table as TTable } from 'tdesign-vue-next'
 import type { AdminPage, AdminUser, PointCredit } from '../admin'
 import { api, errorMessage, jsonBody } from '../api'
 import { dates } from '../recharge'
+
+defineProps<{ operatorName: string }>()
 
 const path = '/api/admin/users'
 const columns = [
@@ -22,21 +24,21 @@ const loading = ref(false)
 const error = ref('')
 const dialogError = ref('')
 const saving = ref(false)
+const enabling = ref<number>()
 const action = ref<'create' | 'edit' | 'grant' | 'history' | 'disable'>()
 const selected = ref<AdminUser>()
-const form = reactive({ phone: '', password: '', enabled: true, points: 0, note: '' })
+const form = reactive({ phone: '', password: '', points: 0, note: '' })
 const credits = ref<PointCredit[]>([])
 const readingCredits = ref(false)
 let grantRequestId = ''
 const titles = { create: '新增用户', edit: '编辑用户', grant: '添加积分', history: '积分记录', disable: '停用账号' }
 const confirm = computed(() => {
-  if (action.value === 'history') return false
   if (action.value === 'disable') return { content: '停用', theme: 'danger' as const, loading: saving.value }
   return { content: action.value === 'grant' ? '确认入账' : '保存', loading: saving.value }
 })
 
 async function load(next = page.value, query = search.value) {
-  if (loading.value) return
+  if (loading.value || enabling.value !== undefined) return
   loading.value = true
   error.value = ''
   try {
@@ -57,7 +59,6 @@ function open(mode: Exclude<typeof action.value, undefined>, user?: AdminUser) {
   selected.value = user
   form.phone = user?.phone ?? ''
   form.password = ''
-  form.enabled = user?.enabled ?? true
   form.points = 0
   form.note = ''
   grantRequestId = mode === 'grant' ? crypto.randomUUID() : ''
@@ -84,10 +85,29 @@ function close() {
   form.password = ''
 }
 
+async function changeStatus(userPath: string, enabled: boolean) {
+  const updated = await api<AdminUser>(userPath, jsonBody({ enabled }, 'PATCH'))
+  rows.value = rows.value.map(row => row.id === updated.id ? updated : row)
+  void MessagePlugin.success(enabled ? '账号已启用' : '账号已停用')
+}
+
+async function enable(user: AdminUser) {
+  if (loading.value || saving.value || enabling.value !== undefined) return
+  enabling.value = user.id
+  error.value = ''
+  try {
+    await changeStatus(path + '/' + user.id, true)
+  } catch (failure) {
+    error.value = errorMessage(failure)
+  } finally {
+    enabling.value = undefined
+  }
+}
+
 async function save() {
   const user = selected.value
   const mode = action.value
-  if (!mode || mode === 'history' || saving.value || (mode !== 'create' && !user)) return
+  if (!mode || mode === 'history' || saving.value || enabling.value !== undefined || (mode !== 'create' && !user)) return
   if (mode === 'grant' && (!Number.isInteger(form.points) || form.points <= 0 || !form.note.trim())) {
     dialogError.value = '请填写正整数积分和入账原因。'
     return
@@ -100,10 +120,10 @@ async function save() {
       await api<AdminUser>(path, jsonBody({ phone: form.phone.trim(), password: form.password }))
     } else if (mode === 'edit') {
       await api<AdminUser>(userPath, jsonBody({
-        phone: form.phone.trim(), password: form.password || undefined, enabled: form.enabled,
+        phone: form.phone.trim(), password: form.password || undefined,
       }, 'PATCH'))
     } else if (mode === 'disable') {
-      await api<void>(userPath, { method: 'DELETE' })
+      await changeStatus(userPath, false)
     } else {
       await api<PointCredit>(userPath + '/credits', jsonBody({
         requestId: grantRequestId, points: form.points, note: form.note.trim(),
@@ -111,8 +131,10 @@ async function save() {
     }
     action.value = undefined
     form.password = ''
-    void MessagePlugin.success(mode === 'grant' ? '积分已入账' : mode === 'disable' ? '账号已停用' : '已保存')
-    await load(mode === 'create' ? 1 : page.value, mode === 'create' ? '' : search.value)
+    if (mode !== 'disable') {
+      void MessagePlugin.success(mode === 'grant' ? '积分已入账' : '已保存')
+      await load(mode === 'create' ? 1 : page.value, mode === 'create' ? '' : search.value)
+    }
     if (mode === 'create') phone.value = ''
   } catch (failure) {
     dialogError.value = errorMessage(failure)
@@ -131,12 +153,13 @@ onMounted(() => void load())
         <div class="admin-actions">
           <label for="admin-phone-search" class="sr-only">搜索手机号</label>
           <t-input v-field-id="'admin-phone-search'" v-model="phone" clearable :maxlength="11"
-            placeholder="搜索手机号" @enter="load(1, phone.trim())" @clear="load(1, '')">
+            :disabled="enabling !== undefined" placeholder="搜索手机号" @enter="load(1, phone.trim())" @clear="load(1, '')">
             <template #prefix-icon><SearchIcon /></template>
           </t-input>
-          <t-button theme="default" variant="outline" :disabled="loading" @click="load(1, phone.trim())">搜索</t-button>
+          <t-button theme="default" variant="outline" :disabled="loading || enabling !== undefined"
+            @click="load(1, phone.trim())">搜索</t-button>
         </div>
-        <t-button @click="open('create')">
+        <t-button :disabled="enabling !== undefined" @click="open('create')">
           <template #icon><AddIcon /></template>
           新增用户
         </t-button>
@@ -154,22 +177,29 @@ onMounted(() => void load())
           </template>
           <template #actions="{ row }">
             <div class="admin-row-actions">
-              <t-button variant="text" theme="default" @click="open('edit', row)">编辑</t-button>
-              <t-button variant="text" theme="default" @click="openHistory(row)">积分记录</t-button>
-              <t-button v-if="row.enabled" theme="danger" variant="text" @click="open('disable', row)">停用</t-button>
-              <t-button variant="outline" @click="open('grant', row)">添加积分</t-button>
+              <t-button variant="text" theme="default" :disabled="enabling !== undefined" @click="open('edit', row)">编辑</t-button>
+              <t-button variant="text" theme="default" :disabled="enabling !== undefined" @click="openHistory(row)">积分记录</t-button>
+              <t-button variant="text" :theme="row.enabled ? 'danger' : 'primary'" :loading="enabling === row.id"
+                :disabled="loading || saving || enabling !== undefined"
+                @click="row.enabled ? open('disable', row) : enable(row)">{{ row.enabled ? '停用' : '启用' }}</t-button>
+              <t-button variant="outline" :disabled="enabling !== undefined" @click="open('grant', row)">添加积分</t-button>
             </div>
           </template>
         </t-table>
       </div>
       <div v-if="page > 1 || hasMore" class="admin-actions admin-pages">
-        <t-button size="small" variant="outline" :disabled="loading || page === 1" @click="load(page - 1)">上一页</t-button>
+        <t-button size="small" variant="outline" :disabled="loading || enabling !== undefined || page === 1"
+          @click="load(page - 1)">上一页</t-button>
         <span>第 {{ page }} 页</span>
-        <t-button size="small" variant="outline" :disabled="loading || !hasMore" @click="load(page + 1)">下一页</t-button>
+        <t-button size="small" variant="outline" :disabled="loading || enabling !== undefined || !hasMore"
+          @click="load(page + 1)">下一页</t-button>
       </div>
     </t-card>
     <t-dialog :visible="!!action" :header="action ? titles[action] : ''" :confirm-btn="confirm"
-      :cancel-btn="action === 'history' ? '关闭' : '取消'" @confirm="save" @close="close" @cancel="close">
+      cancel-btn="取消" @confirm="save" @close="close" @cancel="close">
+      <template v-if="action === 'history'" #footer>
+        <t-button theme="default" variant="outline" @click="close">关闭</t-button>
+      </template>
       <t-form v-if="action === 'create' || action === 'edit'" :data="form" label-align="top" @submit="save">
         <t-form-item label="手机号" for="admin-user-phone" required-mark>
           <t-input v-field-id="'admin-user-phone'" v-model="form.phone" :maxlength="11" :disabled="saving" />
@@ -178,7 +208,6 @@ onMounted(() => void load())
           <t-input v-field-id="'admin-user-password'" v-model="form.password" type="password" :maxlength="40"
             autocomplete="new-password" :disabled="saving" placeholder="6–20 个字符" />
         </t-form-item>
-        <t-checkbox v-if="action === 'edit'" v-model="form.enabled" :disabled="saving">允许登录</t-checkbox>
       </t-form>
       <t-form v-else-if="action === 'grant'" :data="form" label-align="top" @submit="save">
         <p class="admin-user-label">{{ selected?.phone }} · 余额 {{ selected?.points }} 积分</p>
@@ -191,18 +220,18 @@ onMounted(() => void load())
         </t-form-item>
       </t-form>
       <div v-else-if="action === 'history'" class="admin-ledger">
-        <p>{{ selected?.phone }} · 余额 {{ selected?.points }} 积分</p>
+        <p>{{ selected?.phone }} · 余额 {{ credits[0]?.balanceAfter ?? selected?.points }} 积分</p>
         <t-loading v-if="readingCredits" text="读取积分记录" />
         <p v-else-if="!credits.length && !dialogError" class="secondary-text">还没有积分记录。</p>
         <div v-for="credit in credits" :key="credit.id" class="utility-row">
           <div>
             <strong>{{ credit.note }}</strong>
-            <p class="secondary-text">{{ dates.format(new Date(credit.createdAt)) }} · 操作者 {{ credit.operatorId }}</p>
+            <p class="secondary-text">{{ dates.format(new Date(credit.createdAt)) }} · 操作者 {{ operatorName }}</p>
           </div>
           <span>+{{ credit.points }} · 余额 {{ credit.balanceAfter }}</span>
         </div>
       </div>
-      <p v-else-if="action === 'disable'">停用 {{ selected?.phone }} 后，该账号将退出登录。编辑账号可恢复登录。</p>
+      <p v-else-if="action === 'disable'">停用 {{ selected?.phone }} 后，该账号将退出登录。可在用户列表中重新启用。</p>
       <t-alert v-if="dialogError" class="admin-probe" theme="error" :message="dialogError" />
     </t-dialog>
   </section>

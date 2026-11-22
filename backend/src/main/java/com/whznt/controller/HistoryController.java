@@ -40,10 +40,11 @@ public class HistoryController {
     public WorkspaceViews.History history(@AuthenticationPrincipal AccountPrincipal principal,
                                            @RequestParam(defaultValue = "") @Size(max = 120) String q,
                                            @RequestParam(defaultValue = "") @Size(max = 120) String assistant,
+                                           @RequestParam(required = false) Conversation.Kind kind,
                                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
                                            OffsetDateTime since,
                                            @RequestParam(defaultValue = "1") @Min(1) int page) {
-        return conversations.history(principal.accountId(), q, assistant, since, page);
+        return conversations.history(principal.accountId(), q, assistant, kind, since, page);
     }
 
     @GetMapping("/{id}")

@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { AddIcon, ArrowLeftIcon, ChatIcon, Edit1Icon, SearchIcon, TimeIcon } from 'tdesign-icons-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { AddIcon, ChatIcon, Edit1Icon, SearchIcon, TimeIcon } from 'tdesign-icons-vue-next'
 import { Empty as TEmpty } from 'tdesign-vue-next'
 import { errorMessage, loadConversations } from '../api'
 import type { ConversationAction, ConversationKind, ConversationRow, HistoryItem } from '../types'
 import { writingExperts } from '../writingExperts'
+import BackButton from './BackButton.vue'
 import ConversationActions from './ConversationActions.vue'
 
-const props = defineProps<{ opening: boolean; revision: number }>()
+const props = defineProps<{ opening: boolean; revision: number; kind: ConversationKind }>()
 const emit = defineEmits<{
   open: [id: number, kind: ConversationKind]; action: [action: ConversationAction, row: ConversationRow]
-  back: []; newChat: []
+  back: []; create: []
 }>()
 
-const assistants = ['', '通用 AI', ...writingExperts.map(expert => expert.name), '人物故事与定位', '手动写稿']
+const drafts = computed(() => props.kind === 'WRITING')
+const heading = computed(() => drafts.value ? '我的稿件' : '历史对话')
+const searchLabel = computed(() => drafts.value ? '搜索稿件标题' : '搜索对话标题')
+const searchFieldId = useId()
+const assistants = ['', ...writingExperts.map(expert => expert.name), '人物故事与定位', '手动写稿']
   .map(value => ({ value, label: value || '全部助手' }))
 const times = [
   { value: 0, label: '全部时间' },
@@ -50,7 +55,8 @@ function timeLabel(updatedAt: string) {
 }
 
 function previewText(preview: string) {
-  return preview.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '').trim()
+  const body = drafts.value ? preview.replace(/^[ \t]{0,3}#{1,6}[ \t]+[^\r\n]*/, '') : preview
+  return body.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '').trim()
 }
 
 async function fetchPage(index: number) {
@@ -60,7 +66,7 @@ async function fetchPage(index: number) {
   pending.value = true
   error.value = ''
   try {
-    const filters = { q: currentQuery.value, assistant: assistant.value, page: index }
+    const filters = { kind: props.kind, q: currentQuery.value, assistant: assistant.value, page: index }
     const result = await loadConversations(days.value ? { ...filters, since: since(days.value) } : filters, request.signal)
     if (request.signal.aborted) return
     items.value = index === 1 ? result.items : [...items.value, ...result.items]
@@ -94,24 +100,22 @@ onBeforeUnmount(() => activeRequest?.abort())
 </script>
 
 <template>
-  <section class="history-pane" aria-label="历史对话">
+  <section class="history-pane" :aria-label="heading">
+    <BackButton :label="drafts ? '返回专家库' : '返回对话'" @back="emit('back')" />
     <header class="history-heading">
-      <t-button variant="text" theme="default" shape="square" aria-label="返回对话" @click="emit('back')">
-        <template #icon><ArrowLeftIcon /></template>
-      </t-button>
-      <h1>历史对话</h1>
-      <t-button variant="outline" @click="emit('newChat')">
+      <h1>{{ heading }}</h1>
+      <t-button variant="outline" @click="emit('create')">
         <template #icon><AddIcon /></template>
-        新对话
+        {{ drafts ? '选专家写稿' : '新对话' }}
       </t-button>
     </header>
-    <div class="history-filters" role="search">
-      <label class="sr-only" for="history-search">搜索对话标题</label>
-      <t-input v-field-id="'history-search'" v-model="query" clearable placeholder="搜索对话标题"
+    <div class="history-filters" :class="{ 'history-filters-with-assistant': drafts }" role="search">
+      <label class="sr-only" :for="searchFieldId">{{ searchLabel }}</label>
+      <t-input v-field-id="searchFieldId" v-model="query" clearable :placeholder="searchLabel"
         :maxlength="120" @enter="search" @clear="clearQuery">
         <template #prefix-icon><SearchIcon /></template>
       </t-input>
-      <t-select v-model="assistant" :options="assistants" aria-label="筛选助手" @change="search" />
+      <t-select v-if="drafts" v-model="assistant" :options="assistants" aria-label="筛选稿件助手" @change="search" />
       <t-select v-model="days" :options="times" aria-label="筛选时间" @change="search" />
     </div>
 
@@ -129,15 +133,17 @@ onBeforeUnmount(() => activeRequest?.abort())
           </span>
         </button>
         <time :datetime="row.updatedAt" :title="formatter.format(new Date(row.updatedAt))">{{ timeLabel(row.updatedAt) }}</time>
-        <ConversationActions :title="row.title" :disabled="opening" @action="emit('action', $event, row)" />
+        <ConversationActions :title="row.title" :disabled="opening" :draft="drafts" @action="emit('action', $event, row)" />
       </li>
     </ul>
-    <t-loading v-else-if="pending" text="正在读取历史对话" />
+    <t-loading v-else-if="pending" :text="drafts ? '正在读取稿件' : '正在读取历史对话'" />
     <t-empty v-else-if="!error" class="empty-history"
-      :title="currentQuery || assistant || days ? '未找到相关对话' : '还没有对话记录'">
+      :title="currentQuery || assistant || days
+        ? (drafts ? '未找到相关稿件' : '未找到相关对话')
+        : (drafts ? '还没有稿件' : '还没有对话记录')">
       <template #image><TimeIcon aria-hidden="true" /></template>
       <template v-if="!currentQuery && !assistant && !days" #action>
-        <t-button variant="outline" @click="emit('newChat')">开始对话</t-button>
+        <t-button variant="outline" @click="emit('create')">{{ drafts ? '选专家写稿' : '开始对话' }}</t-button>
       </template>
     </t-empty>
     <t-button v-if="hasMore" variant="outline" class="load-more" :loading="pending" @click="fetchPage(page + 1)">

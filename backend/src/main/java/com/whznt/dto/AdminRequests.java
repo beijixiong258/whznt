@@ -12,8 +12,7 @@ public final class AdminRequests {
     private AdminRequests() {
     }
 
-    public record UpdateUser(@NotBlank @Size(max = 30) String phone, @Size(max = 40) String password,
-                             @NotNull Boolean enabled) {
+    public record UpdateUser(@Size(max = 30) String phone, @Size(max = 40) String password, Boolean enabled) {
     }
 
     public record Grant(@NotNull UUID requestId, @Positive int points, @NotBlank @Size(max = 200) String note) {
