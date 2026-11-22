@@ -13,5 +13,5 @@ target "release" {
     frontend = "target:frontend"
   }
   platforms = ["linux/amd64"]
-  tags = ["whznt:0.1.0"]
+  tags = ["whznt:latest"]
 }

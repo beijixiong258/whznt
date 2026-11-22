@@ -4,14 +4,14 @@
 
 ## 下载 Release 镜像运行
 
-从 [GitHub Releases](https://github.com/beijixiong258/whznt/releases) 下载 `whznt-0.1.0-linux-amd64.tar`，打开 Docker Desktop 的 Linux 容器模式，在 PowerShell 中执行以下命令。
+从 [GitHub Releases](https://github.com/beijixiong258/whznt/releases) 下载 `whznt-linux-amd64.tar`，打开 Docker Desktop 的 Linux 容器模式，在 PowerShell 中执行以下命令。
 
 ```powershell
-docker load -i .\whznt-0.1.0-linux-amd64.tar
+docker load -i .\whznt-linux-amd64.tar
 docker run -d --name whznt --stop-timeout 30 -p 127.0.0.1:5173:80 `
   -v whznt-release-db:/var/lib/postgresql/data `
   -v whznt-release-files:/var/lib/whznt `
-  whznt:0.1.0
+  whznt
 ```
 
 容器健康状态显示 `healthy` 后，打开 [本机工作台](http://127.0.0.1:5173)。日常用 `docker stop whznt` 和 `docker start whznt` 停止和启动。重新创建容器时继续挂载上述两个卷，即可保留数据库、资料和视频。
