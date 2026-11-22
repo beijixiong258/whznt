@@ -62,7 +62,7 @@ public class TextModel {
                 Files.deleteIfExists(pending);
             }
         } catch (IOException exception) {
-            throw WorkspaceException.unavailable("无法保存上游设置，请检查后端存储。");
+            throw WorkspaceException.unavailable("无法保存 AI 提供商配置，请检查后端存储。");
         }
         active = next;
         return settings();
@@ -85,7 +85,7 @@ public class TextModel {
         }
         Long firstReplyMs = firstReply.get() >= 0 ? firstReply.get() : null;
         return new AdminViews.Probe(connected, firstReplyMs, elapsedMs(start),
-                connected ? "已收到模型回复。" : "测试未收到完整回复，请检查上游地址、模型名称和 API Key。");
+                connected ? "已收到模型回复。" : "测试未收到完整回复，请检查 API 地址、模型名称和密钥。");
     }
 
     public Client ready() {
@@ -108,7 +108,7 @@ public class TextModel {
         String apiKey = Objects.toString(input.apiKey(), "").strip();
         Configuration current = active.configuration();
         if (apiKey.isBlank() && baseUrl.equals(current.baseUrl())) apiKey = current.apiKey();
-        if (apiKey.isBlank()) throw WorkspaceException.badRequest("请输入这个上游的 API Key。");
+        if (apiKey.isBlank()) throw WorkspaceException.badRequest("请输入这个 AI 提供商的 API 密钥。");
         return new Configuration(baseUrl, input.model().strip(), apiKey);
     }
 
@@ -118,7 +118,7 @@ public class TextModel {
         try {
             uri = URI.create(address);
         } catch (IllegalArgumentException exception) {
-            throw WorkspaceException.badRequest("请输入有效的 AI 上游地址。");
+            throw WorkspaceException.badRequest("请输入有效的 API 地址。");
         }
         if (uri.getHost() == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null
                 || !("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))

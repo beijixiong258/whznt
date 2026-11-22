@@ -18,7 +18,7 @@ const props = defineProps<{
   initial: ConversationDetail | null; initialVersion?: number; initialExpert?: WritingExpert
 }>()
 const emit = defineEmits<{
-  saved: []; dirty: [value: boolean]; busy: [value: boolean]
+  saved: [id: number]; dirty: [value: boolean]; busy: [value: boolean]
   experts: []
   project: [id: number]; upstream: [id: number, version: number]
   subtitle: [reference: { draftId: number; versionId: number; title: string }]
@@ -170,13 +170,13 @@ async function generate(kind: 'WRITE' | 'REGENERATE' = 'WRITE') {
     }
     if (requestInput && version.value?.writingInput) setWritingInput(version.value.writingInput)
     retry = undefined
-    emit('saved')
+    emit('saved', conversationId.value)
   } catch (failure) {
     error.value = controller.signal.aborted ? '已停止生成。原稿和输入已保留。' : errorMessage(failure)
     if (controller.signal.aborted || (failure instanceof ApiError && !(failure instanceof StreamInterrupted))) {
       retry = undefined
     }
-    if (conversationId.value !== null) emit('saved')
+    if (conversationId.value !== null) emit('saved', conversationId.value)
     mode.value = 'edit'
   } finally {
     partial.value = ''
@@ -199,7 +199,7 @@ async function save() {
     const path = conversationId.value === null ? '/api/drafts' : '/api/drafts?conversationId=' + conversationId.value
     setDraft(await api<Manuscript>(path, jsonBody({ content: content.value, baseVersionId: latest.value })))
     retry = undefined
-    emit('saved')
+    if (conversationId.value !== null) emit('saved', conversationId.value)
     void MessagePlugin.success('已保存新版本')
   } catch (failure) {
     error.value = errorMessage(failure)
@@ -319,7 +319,7 @@ onBeforeUnmount(() => abort?.abort())
 </script>
 
 <template>
-  <section class="write-pane" :class="{ 'expert-writing': projectId === null }">
+  <section class="write-pane">
     <template v-if="projectId === null">
       <t-button class="writer-back" variant="text" theme="default" size="small" @click="emit('experts')">
         <template #icon><ArrowLeftIcon /></template>

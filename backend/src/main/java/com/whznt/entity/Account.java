@@ -12,6 +12,7 @@ public class Account {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String phone;
+    private String username;
     private String passwordHash;
     private Role role;
     private boolean enabled;

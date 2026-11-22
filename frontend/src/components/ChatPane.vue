@@ -6,8 +6,8 @@ import { ApiError, errorMessage, loadConversation, streamGeneration, StreamInter
 import type { ChatMessage, ConversationDetail, GenerationRequest } from '../types'
 import MarkdownView from './MarkdownView.vue'
 
-const props = defineProps<{ initial: ConversationDetail | null }>()
-const emit = defineEmits<{ saved: []; dirty: [value: boolean]; busy: [value: boolean] }>()
+const props = defineProps<{ initial: ConversationDetail | null; username: string }>()
+const emit = defineEmits<{ saved: [id: number]; dirty: [value: boolean]; busy: [value: boolean] }>()
 
 const conversationId = ref(props.initial?.conversation.id ?? null)
 const messages = ref<ChatMessage[]>(props.initial?.messages ?? [])
@@ -60,7 +60,7 @@ async function send() {
     input.value = ''
     partial.value = ''
     retry = undefined
-    emit('saved')
+    emit('saved', conversationId.value)
     scrollToBottom()
   } catch (failure) {
     error.value = controller.signal.aborted ? '已停止生成，可以继续编辑输入。' : errorMessage(failure)
@@ -68,7 +68,7 @@ async function send() {
       retry = undefined
     }
     partial.value = ''
-    if (conversationId.value !== null) emit('saved')
+    if (conversationId.value !== null) emit('saved', conversationId.value)
   } finally {
     sending.value = false
     pendingPrompt.value = ''
@@ -98,7 +98,7 @@ onBeforeUnmount(() => abort?.abort())
 <template>
   <section class="chat-pane" :class="{ 'chat-home': !hasConversation }" aria-label="通用对话">
     <div v-if="!hasConversation" class="chat-intro">
-      <h1>你好，今天想聊点什么？</h1>
+      <h1>{{ username ? '你好，' + username : '你好，今天想聊点什么？' }}</h1>
       <p>我能帮你找选题、写文案、改稿子。有什么想法，直接跟我说。</p>
     </div>
     <t-alert v-if="error" theme="warning" :message="error" close @close="error = ''" />

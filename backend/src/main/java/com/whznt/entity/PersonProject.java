@@ -17,4 +17,5 @@ public class PersonProject {
     private String name;
     private String summary;
     private OffsetDateTime updatedAt;
+    private OffsetDateTime deletedAt;
 }

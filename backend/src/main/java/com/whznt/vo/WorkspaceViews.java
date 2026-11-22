@@ -14,10 +14,14 @@ public final class WorkspaceViews {
     private WorkspaceViews() {
     }
 
-    public record Account(long id, String phone, Role role) {
+    public record Account(long id, String phone, String username, Role role) {
     }
 
-    public record History(List<ConversationRow> items, boolean hasMore) {
+    public record History(List<HistoryItem> items, boolean hasMore) {
+    }
+
+    public record HistoryItem(long id, Conversation.Kind kind, String title, OffsetDateTime updatedAt, Long projectId,
+                              String assistant, long entryCount, String preview) {
     }
 
     public record ConversationRow(long id, Conversation.Kind kind, String title, OffsetDateTime updatedAt, Long projectId) {

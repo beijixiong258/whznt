@@ -8,6 +8,7 @@ export interface AdminPage<T> {
 export interface AdminUser {
   id: number
   phone: string
+  username: string
   enabled: boolean
   points: number
 }

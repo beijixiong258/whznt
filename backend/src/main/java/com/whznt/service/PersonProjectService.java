@@ -12,5 +12,6 @@ public interface PersonProjectService extends IService<PersonProject> {
     PersonProject lockOwned(long ownerId, long projectId);
     List<ProjectViews.Profile> profiles(long ownerId);
     ProjectViews.Profile saveProfile(long ownerId, Long projectId, ProjectRequests.Profile request);
+    void deleteProfile(long ownerId, long projectId);
     void touch(PersonProject project);
 }

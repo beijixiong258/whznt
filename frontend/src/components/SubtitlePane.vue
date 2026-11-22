@@ -207,15 +207,17 @@ onBeforeUnmount(() => window.clearInterval(poll))
 
       <t-card v-if="!current" title="上传视频">
         <t-form class="utility-form" :data="{ mode, script }" label-align="top" @submit="create">
-          <t-form-item label="口播视频" required-mark>
-            <t-upload v-model="videos" :auto-upload="false" :max="1" accept=".mp4"
-              :disabled="operating" tips="H.264 编码的 MP4，不超过 512 MB" />
-          </t-form-item>
-          <t-form-item label="字幕来源">
-            <t-radio-group v-model="mode" :disabled="operating" variant="outline" class="utility-choices">
-              <t-radio-button v-for="[value, label] in modeOptions" :key="value" :value="value">{{ label }}</t-radio-button>
-            </t-radio-group>
-          </t-form-item>
+          <div class="subtitle-upload-fields">
+            <t-form-item label="口播视频" required-mark>
+              <t-upload v-model="videos" :auto-upload="false" :max="1" accept=".mp4"
+                :disabled="operating" tips="H.264 编码的 MP4，不超过 512 MB" />
+            </t-form-item>
+            <t-form-item label="字幕来源">
+              <t-radio-group v-model="mode" :disabled="operating" variant="outline" class="utility-choices">
+                <t-radio-button v-for="[value, label] in modeOptions" :key="value" :value="value">{{ label }}</t-radio-button>
+              </t-radio-group>
+            </t-form-item>
+          </div>
           <t-form-item v-if="mode === 'ALIGN'" label="用于对齐的逐字稿" for="subtitle-script">
             <div v-if="reference" class="utility-inline">
               <span>{{ reference.title }}</span>
@@ -228,9 +230,11 @@ onBeforeUnmount(() => window.clearInterval(poll))
             <t-upload v-model="files" :auto-upload="false" :max="1" accept=".srt"
               :disabled="operating" tips="不超过 1 MB 的 SRT" />
           </t-form-item>
-          <t-button type="submit" :disabled="operating" :loading="busy">
-            {{ mode === 'IMPORT' ? '导入并校对' : '开始生成字幕' }}
-          </t-button>
+          <div class="subtitle-upload-actions">
+            <t-button type="submit" :disabled="operating" :loading="busy">
+              {{ mode === 'IMPORT' ? '导入并校对' : '开始生成字幕' }}
+            </t-button>
+          </div>
         </t-form>
       </t-card>
 

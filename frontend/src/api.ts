@@ -37,8 +37,10 @@ export function loadConversation(id: number): Promise<ConversationDetail> {
   return api<ConversationDetail>('/api/conversations/' + id)
 }
 
-export function loadConversations(query: string, page: number, signal?: AbortSignal): Promise<HistoryPage> {
-  const params = new URLSearchParams({ q: query, page: String(page) })
+export function loadConversations(filters: { q?: string; assistant?: string; since?: string; page?: number } = {},
+                                  signal?: AbortSignal): Promise<HistoryPage> {
+  const params = new URLSearchParams()
+  for (const [name, value] of Object.entries(filters)) params.set(name, String(value))
   return api<HistoryPage>('/api/conversations?' + params, { signal })
 }
 
@@ -60,7 +62,7 @@ async function request(path: string, init: RequestInit, accept = 'application/js
 
   const response = await fetch(path, { ...init, headers, credentials: 'same-origin', cache: 'no-store' })
   if (!response.ok) {
-    if (response.status === 401 && !path.startsWith('/api/auth/')) {
+    if (response.status === 401 && !/^\/api\/(?:admin\/)?auth\//.test(path)) {
       window.dispatchEvent(new Event('whznt:session-expired'))
     }
     const payload = await response.json().catch(() => null) as { message?: string } | null

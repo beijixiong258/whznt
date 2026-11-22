@@ -22,13 +22,12 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
 
     @Override
     public Conversation requireOwned(long ownerId, long id) {
-        Conversation row = lambdaQuery().eq(Conversation::getId, id).eq(Conversation::getOwnerId, ownerId).one();
-        return requireRow(row);
+        return requireAccessible(baseMapper.findOwned(id, ownerId));
     }
 
     @Override
     public Conversation lockOwned(long ownerId, long id) {
-        return requireRow(baseMapper.lockOwned(id, ownerId));
+        return requireAccessible(baseMapper.lockOwned(id, ownerId));
     }
 
     @Override
@@ -53,24 +52,33 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
     }
 
     @Override
-    public WorkspaceViews.History history(long ownerId, String query, int page) {
-        List<Conversation> rows = baseMapper.findHistory(ownerId, query.strip(), PAGE_SIZE + 1,
-                (long) (page - 1) * PAGE_SIZE);
-        List<WorkspaceViews.ConversationRow> items = rows.stream()
-                .limit(PAGE_SIZE)
-                .map(WorkspaceViews.ConversationRow::from)
-                .toList();
-        return new WorkspaceViews.History(items, rows.size() > PAGE_SIZE);
+    public WorkspaceViews.History history(long ownerId, String query, String assistant, OffsetDateTime since, int page) {
+        List<WorkspaceViews.HistoryItem> rows = baseMapper.findHistory(ownerId, query.strip(), assistant.strip(), since,
+                PAGE_SIZE + 1, (long) (page - 1) * PAGE_SIZE);
+        return new WorkspaceViews.History(rows.subList(0, Math.min(rows.size(), PAGE_SIZE)), rows.size() > PAGE_SIZE);
     }
 
     @Override
     @Transactional
     public WorkspaceViews.ConversationRow rename(long ownerId, long id, String title) {
         Conversation row = lockOwned(ownerId, id);
+        if (row.getDeletedAt() != null) {
+            throw WorkspaceException.notFound("找不到这条会话。");
+        }
         row.setTitle(shortTitle(title));
         row.setUpdatedAt(OffsetDateTime.now());
         updateById(row);
         return WorkspaceViews.ConversationRow.from(row);
+    }
+
+    @Override
+    @Transactional
+    public void removeFromHistory(long ownerId, long id) {
+        Conversation row = requireRow(baseMapper.lockOwned(id, ownerId));
+        if (row.getDeletedAt() == null) {
+            row.setDeletedAt(OffsetDateTime.now());
+            updateById(row);
+        }
     }
 
     @Override
@@ -93,5 +101,13 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
             throw WorkspaceException.notFound("找不到这条会话。");
         }
         return row;
+    }
+
+    private static Conversation requireAccessible(Conversation row) {
+        Conversation conversation = requireRow(row);
+        if (conversation.getDeletedAt() != null && conversation.getProjectId() == null) {
+            throw WorkspaceException.notFound("找不到这条会话。");
+        }
+        return conversation;
     }
 }

@@ -55,10 +55,6 @@ public class ProjectPlanService {
             }
         }
         List<ProjectMaterial> projectMaterials = materials.listForProject(projectId);
-        if (project.getSummary().isBlank() && upstream.isEmpty()
-                && projectMaterials.stream().allMatch(material -> material.getKind() == ProjectMaterial.Kind.STYLE)) {
-            throw WorkspaceException.badRequest("请补充人物简介、采访资料或已有成果。");
-        }
         List<Long> materialVersions = projectMaterials.stream().map(ProjectMaterial::getCurrentVersionId).toList();
         return new ProjectGeneration.Plan(project.getOwnerId(), projectId, project.getName(), project.getSummary(),
                 step, target.slot(), existing == null ? null : existing.getId(), currentId, target.title(),

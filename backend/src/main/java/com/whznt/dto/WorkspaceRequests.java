@@ -19,6 +19,9 @@ public final class WorkspaceRequests {
             @NotNull(message = "请输入密码。") String password) {
     }
 
+    public record Username(@NotNull(message = "请提供用户名。") String username) {
+    }
+
     public record Rename(
             @NotBlank(message = "请输入标题。")
             @Size(max = 120, message = "标题最多填写 120 字。") String title) {

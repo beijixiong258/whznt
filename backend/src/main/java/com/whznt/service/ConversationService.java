@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.spring.service.IService;
 import com.whznt.entity.Conversation;
 import com.whznt.vo.WorkspaceViews;
 
+import java.time.OffsetDateTime;
+
 public interface ConversationService extends IService<Conversation> {
 
     Conversation requireOwned(long ownerId, long id);
@@ -14,9 +16,11 @@ public interface ConversationService extends IService<Conversation> {
 
     Conversation createForProject(long ownerId, long projectId, String title);
 
-    WorkspaceViews.History history(long ownerId, String query, int page);
+    WorkspaceViews.History history(long ownerId, String query, String assistant, OffsetDateTime since, int page);
 
     WorkspaceViews.ConversationRow rename(long ownerId, long id, String title);
+
+    void removeFromHistory(long ownerId, long id);
 
     void touch(Conversation conversation, String titleIfUnnamed);
 }

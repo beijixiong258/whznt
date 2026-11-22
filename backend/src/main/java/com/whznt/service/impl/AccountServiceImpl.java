@@ -11,9 +11,10 @@ import com.whznt.mapper.AccountMapper;
 import com.whznt.mapper.PointCreditMapper;
 import com.whznt.service.AccountService;
 import com.whznt.vo.AdminViews;
+import com.whznt.vo.WorkspaceViews;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ import java.util.UUID;
 public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> implements AccountService {
 
     private static final int PAGE_SIZE = 50;
+    private static final String ADMIN_USERNAME = "管理员北极熊";
     private final PasswordEncoder passwordEncoder;
     private final PointCreditMapper pointCredits;
 
@@ -37,9 +39,44 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
     }
 
     @Override
+    public WorkspaceViews.Account profile(long id) {
+        return profileView(requireAccount(getById(id)));
+    }
+
+    @Override
+    @Transactional
+    public WorkspaceViews.Account updateUsername(long id, String input) {
+        Account account = requireAccount(baseMapper.lock(id));
+        if (account.getRole() != Account.Role.USER) {
+            throw new WorkspaceException(HttpStatus.FORBIDDEN, "管理员的用户名固定为管理员北极熊。");
+        }
+        String username = input.strip();
+        int width = username.codePoints().map(value -> value < 128 ? 1 : 2).sum();
+        if (username.codePoints().anyMatch(Character::isISOControl) || width > 20) {
+            throw WorkspaceException.badRequest("用户名须为单行，最多 10 个汉字或 20 个英文字母。");
+        }
+        account.setUsername(username);
+        updateById(account);
+        return profileView(account);
+    }
+
+    private static Account requireAccount(Account account) {
+        if (account == null || !account.isEnabled()) {
+            throw new WorkspaceException(HttpStatus.UNAUTHORIZED, "请登录后继续。");
+        }
+        return account;
+    }
+
+    private static WorkspaceViews.Account profileView(Account account) {
+        String username = account.getRole() == Account.Role.ADMIN ? ADMIN_USERNAME : account.getUsername();
+        return new WorkspaceViews.Account(account.getId(), account.getPhone(), username, account.getRole());
+    }
+
+    @Override
     public AdminViews.User createUser(String phone, String password) {
         Account account = new Account();
         account.setPhone(validPhone(phone));
+        account.setUsername("");
         account.setPasswordHash(encodePassword(password));
         account.setRole(Account.Role.USER);
         account.setEnabled(true);
@@ -159,7 +196,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, Account> impl
     }
 
     @Override
-    public UserDetails loadUserByUsername(String username) {
+    public AccountPrincipal loadUserByUsername(String username) {
         Account account = lambdaQuery().eq(Account::getPhone, username.strip()).one();
         if (account == null) {
             throw new UsernameNotFoundException("手机号或密码有误。");

@@ -133,7 +133,10 @@ public class GenerationRunServiceImpl extends ServiceImpl<GenerationRunMapper, G
             throw WorkspaceException.conflict("请求编号已被使用，请重新发起。");
         }
         return switch (run.getState()) {
-            case COMPLETED -> new Prepared(run, true, null, null, null, List.of());
+            case COMPLETED -> {
+                conversations.requireOwned(run.getOwnerId(), run.getConversationId());
+                yield new Prepared(run, true, null, null, null, List.of());
+            }
             case RUNNING -> throw WorkspaceException.conflict("这次生成仍在进行，请稍后再查看。");
             case FAILED -> throw WorkspaceException.conflict("这次生成已失败，请重新发起。");
         };

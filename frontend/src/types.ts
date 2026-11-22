@@ -5,6 +5,7 @@ export type RewriteAction = 'POLISH' | 'SHORTEN' | 'TONE'
 export interface Account {
   id: number
   phone: string
+  username: string
   role: 'USER' | 'ADMIN'
 }
 
@@ -25,6 +26,14 @@ export interface ConversationRow {
   updatedAt: string
   projectId: number | null
 }
+
+export interface HistoryItem extends ConversationRow {
+  assistant: string
+  entryCount: number
+  preview: string | null
+}
+
+export type ConversationAction = 'rename' | 'delete'
 
 export interface VersionRow {
   id: number
@@ -62,7 +71,7 @@ export interface ConversationDetail {
 }
 
 export interface HistoryPage {
-  items: ConversationRow[]
+  items: HistoryItem[]
   hasMore: boolean
 }
 

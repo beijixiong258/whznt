@@ -1,17 +1,20 @@
 package com.whznt.controller;
 
+import com.whznt.config.AccountPrincipal;
 import com.whznt.dto.WorkspaceRequests;
 import com.whznt.entity.Conversation;
 import com.whznt.service.ChatMessageService;
 import com.whznt.service.ConversationService;
 import com.whznt.service.DraftService;
-import com.whznt.config.AccountPrincipal;
 import com.whznt.vo.WorkspaceViews;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,7 +22,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @RestController
@@ -33,9 +38,12 @@ public class HistoryController {
 
     @GetMapping
     public WorkspaceViews.History history(@AuthenticationPrincipal AccountPrincipal principal,
-                                          @RequestParam(defaultValue = "") @Size(max = 120) String q,
-                                          @RequestParam(defaultValue = "1") @Min(1) int page) {
-        return conversations.history(principal.accountId(), q, page);
+                                           @RequestParam(defaultValue = "") @Size(max = 120) String q,
+                                           @RequestParam(defaultValue = "") @Size(max = 120) String assistant,
+                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                                           OffsetDateTime since,
+                                           @RequestParam(defaultValue = "1") @Min(1) int page) {
+        return conversations.history(principal.accountId(), q, assistant, since, page);
     }
 
     @GetMapping("/{id}")
@@ -55,5 +63,11 @@ public class HistoryController {
     public WorkspaceViews.ConversationRow rename(@AuthenticationPrincipal AccountPrincipal principal, @PathVariable long id,
                                                   @Valid @RequestBody WorkspaceRequests.Rename request) {
         return conversations.rename(principal.accountId(), id, request.title());
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void remove(@AuthenticationPrincipal AccountPrincipal principal, @PathVariable long id) {
+        conversations.removeFromHistory(principal.accountId(), id);
     }
 }

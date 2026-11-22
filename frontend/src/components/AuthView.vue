@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Link as TLink } from 'tdesign-vue-next'
 import { api, errorMessage, jsonBody } from '../api'
 import type { Account } from '../types'
 
@@ -39,7 +40,7 @@ async function submit() {
       await api<void>('/api/auth/register', jsonBody({ phone: number, password: submittedPassword }))
       register.value = false
     }
-    await api<void>('/api/auth/login', {
+    await api<void>(props.admin ? '/api/admin/auth/login' : '/api/auth/login', {
       method: 'POST',
       body: new URLSearchParams({ phone: number, password: submittedPassword }),
     })
@@ -74,9 +75,13 @@ async function submit() {
           {{ register ? '注册并进入工作台' : '登录' }}
         </t-button>
       </t-form>
-      <t-button v-if="!admin" variant="text" theme="primary" :disabled="pending" class="auth-switch" @click="switchMode">
-        {{ register ? '已有账号，去登录' : '创建账号' }}
-      </t-button>
+      <div class="auth-links">
+        <t-button v-if="!admin" variant="text" theme="primary" :disabled="pending" @click="switchMode">
+          {{ register ? '已有账号，去登录' : '创建账号' }}
+        </t-button>
+        <t-link v-if="admin" href="/">用户登录</t-link>
+        <t-link v-else href="/admin/login">管理员登录</t-link>
+      </div>
     </section>
   </main>
 </template>

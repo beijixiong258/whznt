@@ -5,8 +5,10 @@ import com.whznt.dto.ProjectRequests;
 import com.whznt.entity.PersonProject;
 import com.whznt.exception.WorkspaceException;
 import com.whznt.mapper.PersonProjectMapper;
+import com.whznt.mapper.ProjectJobMapper;
 import com.whznt.service.PersonProjectService;
 import com.whznt.vo.ProjectViews;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,13 +17,16 @@ import java.util.List;
 import java.util.Objects;
 
 @Service
+@RequiredArgsConstructor
 public class PersonProjectServiceImpl extends ServiceImpl<PersonProjectMapper, PersonProject>
         implements PersonProjectService {
+
+    private final ProjectJobMapper jobs;
 
     @Override
     public PersonProject requireOwned(long ownerId, long projectId) {
         return require(lambdaQuery().eq(PersonProject::getId, projectId)
-                .eq(PersonProject::getOwnerId, ownerId).one());
+                .eq(PersonProject::getOwnerId, ownerId).isNull(PersonProject::getDeletedAt).one());
     }
 
     @Override
@@ -31,7 +36,7 @@ public class PersonProjectServiceImpl extends ServiceImpl<PersonProjectMapper, P
 
     @Override
     public List<ProjectViews.Profile> profiles(long ownerId) {
-        return lambdaQuery().eq(PersonProject::getOwnerId, ownerId)
+        return lambdaQuery().eq(PersonProject::getOwnerId, ownerId).isNull(PersonProject::getDeletedAt)
                 .orderByDesc(PersonProject::getUpdatedAt, PersonProject::getId)
                 .list().stream().map(ProjectViews.Profile::from).toList();
     }
@@ -46,6 +51,15 @@ public class PersonProjectServiceImpl extends ServiceImpl<PersonProjectMapper, P
         project.setUpdatedAt(OffsetDateTime.now());
         saveOrUpdate(project);
         return ProjectViews.Profile.from(project);
+    }
+
+    @Override
+    @Transactional
+    public void deleteProfile(long ownerId, long projectId) {
+        if (baseMapper.markDeleted(projectId, ownerId) == 0) {
+            throw WorkspaceException.notFound("找不到这个人物项目。");
+        }
+        jobs.cancelForDeletedProject(projectId);
     }
 
     @Override

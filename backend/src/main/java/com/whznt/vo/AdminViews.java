@@ -14,9 +14,9 @@ public final class AdminViews {
     public record Page<T>(List<T> items, boolean hasMore) {
     }
 
-    public record User(long id, String phone, boolean enabled, int points) {
+    public record User(long id, String phone, String username, boolean enabled, int points) {
         public static User from(Account account) {
-            return new User(account.getId(), account.getPhone(), account.isEnabled(), account.getPoints());
+            return new User(account.getId(), account.getPhone(), account.getUsername(), account.isEnabled(), account.getPoints());
         }
     }
 

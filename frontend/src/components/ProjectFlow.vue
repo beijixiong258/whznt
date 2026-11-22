@@ -1,24 +1,33 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Card as TCard, MessagePlugin } from 'tdesign-vue-next'
+import { MoreIcon } from 'tdesign-icons-vue-next'
+import { Card as TCard, Dropdown as TDropdown, MessagePlugin, type DropdownOption } from 'tdesign-vue-next'
 import { api, errorMessage, jsonBody } from '../api'
 import { projectPath, running, stepLabels } from '../projects'
 import type { Artifact, ProjectDetail, ProjectJob, ProjectStep, Topic } from '../projects'
 
 const props = defineProps<{ detail: ProjectDetail }>()
 const emit = defineEmits<{ changed: []; open: [conversationId: number, versionId?: number] }>()
-const steps: ProjectStep[] = ['TRAITS', 'STORY', 'POSITION', 'TOPICS']
+const steps = ['TOPICS', 'POSITION', 'STORY', 'TRAITS'] as const
+const stepDetails = {
+  TOPICS: { action: '帮我想选题', description: '给出十个不同的短视频题目，挑一条就能写口播。' },
+  POSITION: { action: '帮我想定位', description: '给出不同的账号方向，并推荐一个先试。' },
+  STORY: { action: '帮我写故事', description: '从已有经历中找切入点，资料少时先给提纲。' },
+  TRAITS: { action: '帮我找亮点', description: '找到擅长的事和可以讲的经历。' },
+}
 const jobLabels = { QUEUED: '排队中', RUNNING: '生成中', COMPLETED: '已完成', FAILED: '生成失败' }
 const existing = computed(() => new Map(props.detail.artifacts.filter(row => row.step !== 'SCRIPT')
   .map(row => [row.step, row] as const)))
 const scripts = computed(() => props.detail.artifacts.filter(row => row.step === 'SCRIPT'))
 const importing = ref<ProjectStep | null>(null)
 const importText = ref('')
-const generating = ref<{ step: ProjectStep; artifact?: Artifact; topic?: Topic; requestId: string } | null>(null)
+type Generation = { step: ProjectStep; artifact?: Artifact; topic?: Topic; requestId: string }
+const generating = ref<Generation | null>(null)
 const instructions = ref('')
 const duration = ref(150)
 const busy = ref(false)
 const dialogError = ref('')
+const generationError = ref('')
 
 function isGenerating(step: ProjectStep) {
   return props.detail.jobs.some(job => job.step === step && running(job))
@@ -64,11 +73,11 @@ async function saveImported() {
   }
 }
 
-async function queue() {
-  const selected = generating.value
-  if (!selected || busy.value) return
+async function queue(selected: Generation, customized = false) {
+  if (busy.value || isGenerating(selected.step)) return
   busy.value = true
   dialogError.value = ''
+  generationError.value = ''
   try {
     await api<ProjectJob>(projectPath(props.detail.project.id) + '/jobs', jsonBody({
       requestId: selected.requestId,
@@ -77,17 +86,36 @@ async function queue() {
       baseVersionId: selected.artifact?.currentVersion.id,
       topicVersionId: selected.topic?.versionId,
       topicIndex: selected.topic?.index,
-      durationSeconds: selected.step === 'SCRIPT' ? duration.value : undefined,
-      instructions: instructions.value,
+      durationSeconds: customized && selected.step === 'SCRIPT' ? duration.value : undefined,
+      instructions: customized ? instructions.value : undefined,
     }))
     generating.value = null
     emit('changed')
     void MessagePlugin.success('已开始后台生成')
   } catch (failure) {
-    dialogError.value = errorMessage(failure)
+    if (customized) dialogError.value = errorMessage(failure)
+    else generationError.value = errorMessage(failure)
   } finally {
     busy.value = false
   }
+}
+
+function generate(step: ProjectStep, artifact?: Artifact, topic?: Topic) {
+  void queue({ step, artifact, topic, requestId: crypto.randomUUID() })
+}
+
+function menuOptions(artifact?: Artifact): DropdownOption[] {
+  return [
+    { value: 'settings', content: '生成设置' },
+    artifact ? { value: 'regenerate', content: '重做这一步' } : { value: 'import', content: '粘贴已有成果' },
+  ]
+}
+
+function chooseAction(option: DropdownOption, step: ProjectStep) {
+  const artifact = existing.value.get(step)
+  if (option.value === 'regenerate') generate(step, artifact)
+  else if (option.value === 'settings') beginGeneration(step, artifact)
+  else if (option.value === 'import') beginImport(step)
 }
 
 function openArtifact(row: Artifact | undefined) {
@@ -97,41 +125,54 @@ function openArtifact(row: Artifact | undefined) {
 
 <template>
   <section class="project-flow">
+    <t-alert v-if="generationError" theme="error" :message="generationError" />
     <div class="steps-grid">
-      <t-card v-for="step in steps" :key="step" :title="stepLabels[step]">
+      <t-card v-for="step in steps" :key="step" :title="stepLabels[step]"
+        :class="{ 'project-step-featured': step === 'TOPICS' && !existing.has(step) }">
         <template #actions>
-          <t-tag v-if="existing.has(step)" theme="success" variant="light">已保存</t-tag>
-          <t-tag v-else-if="isGenerating(step)" theme="primary" variant="light">生成中</t-tag>
+          <t-tag v-if="isGenerating(step)" theme="primary" variant="light">生成中</t-tag>
+          <t-tag v-else-if="existing.has(step)" theme="success" variant="light">已保存</t-tag>
         </template>
-        <p v-if="existing.get(step)" class="step-title">{{ existing.get(step)?.currentVersion.title }}</p>
-        <div class="project-actions">
-          <t-button v-if="existing.has(step)" size="small" variant="outline"
-            @click="openArtifact(existing.get(step))">打开成果</t-button>
-          <t-button v-else size="small" variant="outline" @click="beginImport(step)">录入已有成果</t-button>
-          <t-button size="small" :disabled="isGenerating(step)"
-            @click="beginGeneration(step, existing.get(step))">
-            {{ existing.has(step) ? '重做这一步' : '生成' }}
-          </t-button>
+        <p class="step-description" :class="{ 'secondary-text': !existing.has(step) }">
+          {{ existing.get(step)?.currentVersion.title ?? stepDetails[step].description }}
+        </p>
+        <div class="project-actions project-step-actions">
+          <t-button v-if="existing.has(step)" variant="outline"
+            @click="openArtifact(existing.get(step))">{{ step === 'TOPICS' ? '查看选题' : '打开成果' }}</t-button>
+          <t-button v-else :variant="step === 'TOPICS' ? 'base' : 'outline'" :disabled="busy || isGenerating(step)"
+            @click="generate(step)">{{ stepDetails[step].action }}</t-button>
+          <t-dropdown :options="menuOptions(existing.get(step))" trigger="click" placement="bottom-right"
+            :max-column-width="160" :disabled="busy || isGenerating(step)" @click="chooseAction($event, step)">
+            <t-button variant="text" theme="default" shape="square" :aria-label="stepLabels[step] + '的更多操作'"
+              :disabled="busy || isGenerating(step)">
+              <template #icon><MoreIcon /></template>
+            </t-button>
+          </t-dropdown>
         </div>
       </t-card>
     </div>
-    <t-card title="口播稿">
+    <t-card v-if="detail.topics.length || scripts.length" title="口播稿">
       <div v-if="detail.topics.length">
         <div v-for="topic in detail.topics" :key="topic.versionId + ':' + topic.index" class="project-row">
           <span>{{ topic.title }}</span>
-          <t-button size="small" variant="outline" :disabled="isGenerating('SCRIPT')"
-            @click="beginGeneration('SCRIPT', undefined, topic)">按题写口播</t-button>
+          <div class="project-actions">
+            <t-button size="small" variant="outline" :disabled="busy || isGenerating('SCRIPT')"
+              @click="generate('SCRIPT', undefined, topic)">按题写口播</t-button>
+            <t-button size="small" variant="text" theme="default" :disabled="busy || isGenerating('SCRIPT')"
+              @click="beginGeneration('SCRIPT', undefined, topic)">生成设置</t-button>
+          </div>
         </div>
       </div>
-      <p v-else class="secondary-text">生成或录入选题后，选一条写口播。</p>
       <div v-if="scripts.length" class="scripts-list">
         <h3>已保存口播稿</h3>
         <div v-for="script in scripts" :key="script.id" class="project-row">
           <span>{{ script.topic }}</span>
           <div class="project-actions">
             <t-button size="small" variant="outline" @click="openArtifact(script)">打开稿件</t-button>
-            <t-button size="small" variant="outline" :disabled="isGenerating('SCRIPT')"
-              @click="beginGeneration('SCRIPT', script)">重做这篇</t-button>
+            <t-button size="small" variant="outline" :disabled="busy || isGenerating('SCRIPT')"
+              @click="generate('SCRIPT', script)">重做这篇</t-button>
+            <t-button size="small" variant="text" theme="default" :disabled="busy || isGenerating('SCRIPT')"
+              @click="beginGeneration('SCRIPT', script)">生成设置</t-button>
           </div>
         </div>
       </div>
@@ -164,7 +205,8 @@ function openArtifact(row: Artifact | undefined) {
       <t-alert v-if="dialogError" theme="error" :message="dialogError" />
     </t-dialog>
     <t-dialog :visible="generating !== null" :header="generating ? '生成' + stepLabels[generating.step] : '生成成果'"
-      :confirm-btn="{ content: '开始生成', loading: busy }" @confirm="queue" @cancel="close" @close="close">
+      :confirm-btn="{ content: '开始生成', loading: busy }"
+      @confirm="generating && queue(generating, true)" @cancel="close" @close="close">
       <p v-if="generating?.topic || generating?.artifact?.topic" class="selected-topic">
         {{ generating?.topic?.title ?? generating?.artifact?.topic }}
       </p>

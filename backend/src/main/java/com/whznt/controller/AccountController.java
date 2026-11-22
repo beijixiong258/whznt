@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,6 +37,12 @@ public class AccountController {
 
     @GetMapping("/me")
     public WorkspaceViews.Account me(@AuthenticationPrincipal AccountPrincipal principal) {
-        return new WorkspaceViews.Account(principal.accountId(), principal.getUsername(), principal.role());
+        return accounts.profile(principal.accountId());
+    }
+
+    @PatchMapping("/me")
+    public WorkspaceViews.Account updateUsername(@AuthenticationPrincipal AccountPrincipal principal,
+                                                  @Valid @RequestBody WorkspaceRequests.Username request) {
+        return accounts.updateUsername(principal.accountId(), request.username());
     }
 }

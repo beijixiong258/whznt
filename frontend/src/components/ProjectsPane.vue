@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { AddIcon } from 'tdesign-icons-vue-next'
 import { Card as TCard, MessagePlugin, Tabs as TTabs, TabPanel as TTabPanel } from 'tdesign-vue-next'
 import { api, errorMessage, jsonBody } from '../api'
 import { projectPath, running } from '../projects'
@@ -8,7 +9,9 @@ import ProjectFlow from './ProjectFlow.vue'
 import ProjectMaterials from './ProjectMaterials.vue'
 
 const props = defineProps<{ active: boolean; requestedProject?: { id: number } }>()
-const emit = defineEmits<{ open: [conversationId: number, versionId?: number] }>()
+const emit = defineEmits<{
+  open: [conversationId: number, versionId?: number]; deleted: [projectId: number]; historyChanged: []
+}>()
 const projects = ref<PersonProject[]>([])
 const detail = ref<ProjectDetail | null>(null)
 const activeId = ref<number | null>(null)
@@ -16,6 +19,7 @@ const tab = ref<'flow' | 'materials'>('flow')
 const loading = ref(false)
 const error = ref('')
 const editing = ref<'new' | 'edit' | null>(null)
+const deleting = ref<PersonProject | null>(null)
 const submitting = ref(false)
 const formError = ref('')
 const form = reactive({ name: '', summary: '' })
@@ -27,7 +31,8 @@ let refreshRequest: AbortController | undefined
 async function loadProfiles() {
   try {
     projects.value = await api<PersonProject[]>('/api/projects')
-    const initial = props.requestedProject?.id ?? activeId.value ?? projects.value[0]?.id
+    const requested = props.requestedProject?.id ?? activeId.value
+    const initial = projects.value.find(project => project.id === requested)?.id ?? projects.value[0]?.id
     if (initial) await open(initial)
   } catch (failure) {
     error.value = errorMessage(failure)
@@ -52,6 +57,11 @@ async function refresh(quiet = false) {
   try {
     const result = await api<ProjectDetail>(projectPath(id), { signal: request.signal })
     if (refreshRequest === request) {
+      const previous = detail.value?.artifacts ?? []
+      if (result.artifacts.length !== previous.length
+        || result.artifacts.some((artifact, index) => artifact.currentVersion.id !== previous[index]?.currentVersion.id)) {
+        emit('historyChanged')
+      }
       detail.value = result
       error.value = ''
     }
@@ -78,7 +88,10 @@ function closeProfile() {
 
 async function saveProfile() {
   if (submitting.value || editing.value === null) return
-  if (!form.name.trim()) {
+  const summary = form.summary.trim()
+  const summaryStart = summary.split(/[。！？；\r\n]/, 1)[0].trim()
+  const name = editing.value === 'edit' ? form.name.trim() : [...summaryStart].slice(0, 20).join('') || '新人物档案'
+  if (!name) {
     formError.value = '请输入人物名称。'
     return
   }
@@ -88,12 +101,49 @@ async function saveProfile() {
     const id = editing.value === 'new' ? null : activeId.value
     const result = await api<PersonProject>(
       id === null ? '/api/projects' : projectPath(id),
-      jsonBody(form, id === null ? 'POST' : 'PATCH'),
+      jsonBody({ name, summary }, id === null ? 'POST' : 'PATCH'),
     )
     projects.value = [result, ...projects.value.filter(project => project.id !== result.id)]
     editing.value = null
+    if (id === null) tab.value = 'flow'
     await open(result.id)
     void MessagePlugin.success('已保存人物档案')
+  } catch (failure) {
+    formError.value = errorMessage(failure)
+  } finally {
+    submitting.value = false
+  }
+}
+
+function confirmDelete() {
+  if (!detail.value) return
+  formError.value = ''
+  deleting.value = detail.value.project
+}
+
+function closeDelete() {
+  if (!submitting.value) deleting.value = null
+}
+
+async function deleteProfile() {
+  const project = deleting.value
+  if (!project || submitting.value) return
+  submitting.value = true
+  formError.value = ''
+  try {
+    await api<void>(projectPath(project.id), { method: 'DELETE' })
+    refreshRequest?.abort()
+    refreshRequest = undefined
+    loading.value = false
+    projects.value = projects.value.filter(row => row.id !== project.id)
+    detail.value = null
+    activeId.value = null
+    deleting.value = null
+    tab.value = 'flow'
+    emit('deleted', project.id)
+    const next = projects.value[0]
+    if (next) void open(next.id)
+    void MessagePlugin.success('已删除人物档案')
   } catch (failure) {
     formError.value = errorMessage(failure)
   } finally {
@@ -122,21 +172,26 @@ onBeforeUnmount(() => {
   <section class="projects-pane">
     <div class="page-heading project-heading">
       <h1>人物故事与定位</h1>
-      <t-button @click="startProfile('new')">新建人物档案</t-button>
+      <t-button @click="startProfile('new')">
+        <template #icon><AddIcon /></template>
+        新建人物档案
+      </t-button>
     </div>
     <t-alert v-if="error" theme="error" :message="error" />
-    <div v-if="options.length" class="project-toolbar">
-      <t-select aria-label="切换人物项目" :model-value="activeId ?? undefined" :options="options"
-        placeholder="选择人物项目" @change="open" />
-      <t-button v-if="detail" theme="default" variant="outline" @click="startProfile('edit')">编辑人物档案</t-button>
-    </div>
+    <t-card v-if="options.length" class="project-profile-card" size="small">
+      <div class="project-profile-controls">
+        <t-select aria-label="切换人物档案" :model-value="activeId ?? undefined" :options="options"
+          placeholder="选择人物档案" @change="open" />
+        <t-button v-if="detail" theme="default" variant="outline" @click="startProfile('edit')">编辑档案</t-button>
+        <t-button v-if="detail" theme="danger" variant="text" @click="confirmDelete">删除档案</t-button>
+      </div>
+      <p v-if="detail?.project.summary" class="project-summary">{{ detail.project.summary }}</p>
+    </t-card>
     <t-loading v-if="loading && !detail" text="正在读取人物项目" />
     <t-card v-else-if="!detail && !error">
-      <p class="secondary-text">先建一份人物档案，填一点自己的经历。接下来可以写人物故事、想账号定位和视频选题。</p>
+      <p class="secondary-text">新建档案后，可以先请 AI 想选题，再挑一条写成口播稿。</p>
     </t-card>
     <div v-if="detail" class="project-detail">
-      <h2>{{ detail.project.name }}</h2>
-      <p v-if="detail.project.summary" class="project-summary">{{ detail.project.summary }}</p>
       <t-tabs v-model="tab">
         <t-tab-panel value="flow" label="分步创作">
           <ProjectFlow :key="detail.project.id" :detail="detail"
@@ -149,18 +204,24 @@ onBeforeUnmount(() => {
       </t-tabs>
     </div>
     <t-dialog :visible="editing !== null" :header="editing === 'edit' ? '编辑人物档案' : '新建人物档案'"
-      :confirm-btn="{ content: '保存', loading: submitting }" @confirm="saveProfile"
+      :confirm-btn="{ content: editing === 'new' ? '新建档案' : '保存', loading: submitting }" @confirm="saveProfile"
       @cancel="closeProfile" @close="closeProfile">
       <t-form :data="form" label-align="top" @submit="saveProfile">
-        <t-form-item label="人物名称" name="name" for="profile-name" required-mark>
+        <t-form-item v-if="editing === 'edit'" label="档案名称" name="name" for="profile-name" required-mark>
           <t-input v-field-id="'profile-name'" v-model="form.name" :maxlength="120" placeholder="输入人物名称" />
         </t-form-item>
-        <t-form-item label="人物简介" name="summary" for="profile-summary">
+        <t-form-item label="说说你在做什么，或者想拍什么（选填）" name="summary" for="profile-summary">
           <t-textarea v-field-id="'profile-summary'" v-model="form.summary" :maxlength="6000"
             :autosize="{ minRows: 3, maxRows: 8 }"
-            placeholder="可填写本人身份、工作及希望创作的方向" />
+            placeholder="例如，我开了一家社区面包店，想拍视频讲讲怎么选面包。" />
         </t-form-item>
       </t-form>
+      <t-alert v-if="formError" theme="error" :message="formError" />
+    </t-dialog>
+    <t-dialog :visible="deleting !== null" header="删除人物档案？"
+      :confirm-btn="{ content: '删除档案', theme: 'danger', loading: submitting }"
+      @confirm="deleteProfile" @cancel="closeDelete" @close="closeDelete">
+      <p v-if="deleting" class="project-delete-note">「{{ deleting.name }}」的资料和稿件会从工作台移除，排队的生成任务会取消。</p>
       <t-alert v-if="formError" theme="error" :message="formError" />
     </t-dialog>
   </section>

@@ -1,29 +1,58 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Link as TLink, TabPanel as TTabPanel, Tabs as TTabs } from 'tdesign-vue-next'
+import { reactive, ref } from 'vue'
+import { LogoutIcon, SettingIcon, UserIcon, WalletIcon } from 'tdesign-icons-vue-next'
+import { Avatar as TAvatar } from 'tdesign-vue-next'
 import AdminRecharge from './AdminRecharge.vue'
 import AdminUpstream from './AdminUpstream.vue'
 import AdminUsers from './AdminUsers.vue'
 
-defineProps<{ error: string; loggingOut: boolean }>()
+defineProps<{ username: string; error: string; loggingOut: boolean }>()
 const emit = defineEmits<{ logout: [] }>()
-const tab = ref('recharges')
+const pages = {
+  recharges: { title: '充值记录', icon: WalletIcon, view: AdminRecharge },
+  users: { title: '用户管理', icon: UserIcon, view: AdminUsers },
+  upstream: { title: 'AI 提供商配置', icon: SettingIcon, view: AdminUpstream },
+} as const
+type Page = keyof typeof pages
+const current = ref<Page>('recharges')
+const opened = reactive(new Set<Page>([current.value]))
+
+function open(page: Page) {
+  opened.add(page)
+  current.value = page
+  window.scrollTo(0, 0)
+}
 </script>
 
 <template>
-  <main class="admin-shell">
-    <header class="admin-heading">
-      <h1>管理后台</h1>
-      <div class="admin-actions">
-        <t-link href="/" theme="default">返回用户工作台</t-link>
-        <t-button theme="default" variant="outline" :loading="loggingOut" @click="emit('logout')">退出登录</t-button>
+  <div class="admin-shell">
+    <aside class="admin-sidebar">
+      <div class="brand-lockup">
+        <t-avatar image="/brand.png" size="36px" aria-hidden="true" />
+        <span>管理后台</span>
       </div>
-    </header>
-    <t-alert v-if="error" theme="error" :message="error" />
-    <t-tabs v-model="tab">
-      <t-tab-panel value="recharges" label="充值记录"><AdminRecharge /></t-tab-panel>
-      <t-tab-panel value="users" label="用户管理"><AdminUsers /></t-tab-panel>
-      <t-tab-panel value="upstream" label="AI 上游"><AdminUpstream /></t-tab-panel>
-    </t-tabs>
-  </main>
+      <nav class="admin-navigation" aria-label="后台导航">
+        <t-button v-for="(page, id) in pages" :key="id" class="admin-nav-item" variant="text" block
+          :theme="current === id ? 'primary' : 'default'" :aria-current="current === id ? 'page' : undefined"
+          @click="open(id)">
+          <template #icon><component :is="page.icon" /></template>
+          {{ page.title }}
+        </t-button>
+      </nav>
+      <div class="admin-session">
+        <span>{{ username }}</span>
+        <t-button theme="default" variant="text" shape="square" aria-label="退出登录" title="退出登录"
+          :loading="loggingOut" @click="emit('logout')">
+          <template #icon><LogoutIcon /></template>
+        </t-button>
+      </div>
+    </aside>
+    <main class="admin-content">
+      <header class="admin-heading"><h1>{{ pages[current].title }}</h1></header>
+      <t-alert v-if="error" class="page-alert" theme="error" :message="error" />
+      <template v-for="(page, id) in pages" :key="id">
+        <component :is="page.view" v-if="opened.has(id)" v-show="current === id" />
+      </template>
+    </main>
+  </div>
 </template>

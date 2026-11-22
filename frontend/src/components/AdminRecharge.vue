@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { Link as TLink, MessagePlugin, Table as TTable } from 'tdesign-vue-next'
+import { RefreshIcon } from 'tdesign-icons-vue-next'
+import { Card as TCard, Link as TLink, MessagePlugin, RadioButton as TRadioButton, RadioGroup as TRadioGroup, Table as TTable } from 'tdesign-vue-next'
 import type { AdminOrder, AdminPage } from '../admin'
 import { api, errorMessage, jsonBody } from '../api'
 import { currency, dates, rechargeLabels, rechargeThemes, type RechargeOrder, type RechargeState } from '../recharge'
 
 const path = '/api/admin/recharges'
 const columns = [
-  { colKey: 'user', title: '用户', width: 140 },
-  { colKey: 'details', title: '申请', minWidth: 260 },
-  { colKey: 'status', title: '状态', minWidth: 134 },
-  { colKey: 'actions', title: '操作', width: 220 },
+  { colKey: 'user', title: '用户手机号', width: '20%' },
+  { colKey: 'details', title: '充值申请', width: '32%' },
+  { colKey: 'status', title: '处理状态', width: '17%' },
+  { colKey: 'actions', title: '操作', align: 'right' as const },
 ]
 const filters = [
   { value: 'PENDING', label: '待处理' },
@@ -106,43 +107,52 @@ onMounted(() => void load())
 
 <template>
   <section class="admin-panel" aria-label="充值记录">
-    <div class="admin-toolbar">
-      <t-select class="admin-filter" aria-label="充值状态" :value="filter" :options="[...filters]" @change="changeFilter" />
-      <t-button theme="default" variant="outline" :disabled="loading" @click="load()">刷新</t-button>
-    </div>
-    <t-alert v-if="error" theme="error" :message="error" />
-    <div class="admin-table">
-      <t-table :data="rows" :columns="columns" :loading="loading" row-key="id" empty="没有符合条件的充值记录">
-        <template #user="{ row }">{{ row.phone }}</template>
-        <template #details="{ row }">
-          <strong>{{ currency.format(row.order.amount) }}</strong>
-          <p class="secondary-text">{{ dates.format(new Date(row.order.submittedAt)) }}</p>
-          <p class="secondary-text order-number">{{ row.order.number }}</p>
-          <p v-if="row.order.note" class="secondary-text">{{ row.order.note }}</p>
-        </template>
-        <template #status="{ row }">
-          <t-tag :theme="rechargeThemes[row.order.state as RechargeState]" variant="light">
-            {{ rechargeLabels[row.order.state as RechargeState] }}
-          </t-tag>
-          <p v-if="row.order.creditedPoints !== null" class="secondary-text">+{{ row.order.creditedPoints }} 积分</p>
-          <p v-if="row.order.reviewNote" class="secondary-text">{{ row.order.reviewNote }}</p>
-        </template>
-        <template #actions="{ row }">
-          <div class="admin-actions">
-            <t-link :href="path + '/' + row.order.id + '/receipt'" target="_blank" theme="primary">看截图</t-link>
-            <template v-if="row.order.state === 'PENDING'">
-              <t-button size="small" variant="text" @click="open('credit', row)">入账</t-button>
-              <t-button size="small" variant="text" theme="danger" @click="open('reject', row)">未通过</t-button>
-            </template>
-          </div>
-        </template>
-      </t-table>
-    </div>
-    <div v-if="page > 1 || hasMore" class="admin-actions admin-pages">
-      <t-button size="small" variant="outline" :disabled="loading || page === 1" @click="load(page - 1)">上一页</t-button>
-      <span>第 {{ page }} 页</span>
-      <t-button size="small" variant="outline" :disabled="loading || !hasMore" @click="load(page + 1)">下一页</t-button>
-    </div>
+    <t-card>
+      <div class="admin-toolbar">
+        <t-radio-group aria-label="充值状态" :value="filter" variant="default-filled" @change="changeFilter">
+          <t-radio-button v-for="option in filters" :key="option.value" :value="option.value">{{ option.label }}</t-radio-button>
+        </t-radio-group>
+        <t-button theme="default" variant="outline" :disabled="loading" @click="load()">
+          <template #icon><RefreshIcon /></template>
+          刷新
+        </t-button>
+      </div>
+      <t-alert v-if="error" class="admin-feedback" theme="error" :message="error" />
+      <div class="admin-table">
+        <t-table :data="rows" :columns="columns" :loading="loading" row-key="id" hover empty="没有符合条件的充值记录">
+          <template #user="{ row }"><strong class="admin-number">{{ row.phone }}</strong></template>
+          <template #details="{ row }">
+            <strong class="admin-number">{{ currency.format(row.order.amount) }}</strong>
+            <p class="secondary-text admin-record-meta">
+              <time :datetime="row.order.submittedAt">{{ dates.format(new Date(row.order.submittedAt)) }}</time>
+              <span class="order-number">{{ row.order.number }}</span>
+            </p>
+            <p v-if="row.order.note" class="secondary-text">{{ row.order.note }}</p>
+          </template>
+          <template #status="{ row }">
+            <t-tag :theme="rechargeThemes[row.order.state as RechargeState]" variant="light">
+              {{ rechargeLabels[row.order.state as RechargeState] }}
+            </t-tag>
+            <p v-if="row.order.creditedPoints !== null" class="secondary-text">+{{ row.order.creditedPoints }} 积分</p>
+            <p v-if="row.order.reviewNote" class="secondary-text">{{ row.order.reviewNote }}</p>
+          </template>
+          <template #actions="{ row }">
+            <div class="admin-row-actions">
+              <t-link :href="path + '/' + row.order.id + '/receipt'" target="_blank" theme="primary">查看付款截图</t-link>
+              <template v-if="row.order.state === 'PENDING'">
+                <t-button variant="text" theme="danger" @click="open('reject', row)">未通过</t-button>
+                <t-button variant="outline" @click="open('credit', row)">入账</t-button>
+              </template>
+            </div>
+          </template>
+        </t-table>
+      </div>
+      <div v-if="page > 1 || hasMore" class="admin-actions admin-pages">
+        <t-button size="small" variant="outline" :disabled="loading || page === 1" @click="load(page - 1)">上一页</t-button>
+        <span>第 {{ page }} 页</span>
+        <t-button size="small" variant="outline" :disabled="loading || !hasMore" @click="load(page + 1)">下一页</t-button>
+      </div>
+    </t-card>
     <t-dialog :visible="!!action" :header="action === 'credit' ? '手动入账' : '标记未通过'"
       :confirm-btn="{ content: action === 'credit' ? '确认入账' : '确认', loading: submitting }"
       @confirm="review" @cancel="close" @close="close">

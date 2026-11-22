@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Checkbox as TCheckbox, MessagePlugin, Table as TTable } from 'tdesign-vue-next'
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next'
+import { Card as TCard, Checkbox as TCheckbox, MessagePlugin, Table as TTable } from 'tdesign-vue-next'
 import type { AdminPage, AdminUser, PointCredit } from '../admin'
 import { api, errorMessage, jsonBody } from '../api'
 import { dates } from '../recharge'
 
 const path = '/api/admin/users'
 const columns = [
-  { colKey: 'phone', title: '手机号', width: 150 },
-  { colKey: 'points', title: '积分余额', width: 120 },
-  { colKey: 'enabled', title: '状态', width: 100 },
-  { colKey: 'actions', title: '操作', minWidth: 275 },
+  { colKey: 'phone', title: '用户', width: '28%' },
+  { colKey: 'points', title: '积分余额', width: '16%' },
+  { colKey: 'enabled', title: '账号状态', width: '17%' },
+  { colKey: 'actions', title: '操作', align: 'right' as const },
 ]
 const rows = ref<AdminUser[]>([])
 const phone = ref('')
@@ -125,36 +126,48 @@ onMounted(() => void load())
 
 <template>
   <section class="admin-panel" aria-label="用户管理">
-    <div class="admin-toolbar">
-      <div class="admin-actions">
-        <label for="admin-phone-search" class="sr-only">搜索手机号</label>
-        <t-input v-field-id="'admin-phone-search'" v-model="phone" clearable :maxlength="11"
-          placeholder="输入手机号搜索" @enter="load(1, phone.trim())" />
-        <t-button theme="default" variant="outline" :disabled="loading" @click="load(1, phone.trim())">搜索</t-button>
+    <t-card>
+      <div class="admin-toolbar">
+        <div class="admin-actions">
+          <label for="admin-phone-search" class="sr-only">搜索手机号</label>
+          <t-input v-field-id="'admin-phone-search'" v-model="phone" clearable :maxlength="11"
+            placeholder="搜索手机号" @enter="load(1, phone.trim())" @clear="load(1, '')">
+            <template #prefix-icon><SearchIcon /></template>
+          </t-input>
+          <t-button theme="default" variant="outline" :disabled="loading" @click="load(1, phone.trim())">搜索</t-button>
+        </div>
+        <t-button @click="open('create')">
+          <template #icon><AddIcon /></template>
+          新增用户
+        </t-button>
       </div>
-      <t-button @click="open('create')">新增用户</t-button>
-    </div>
-    <t-alert v-if="error" theme="error" :message="error" />
-    <div class="admin-table">
-      <t-table :data="rows" :columns="columns" :loading="loading" row-key="id" empty="没有找到用户">
-        <template #enabled="{ row }">
-          <t-tag :theme="row.enabled ? 'success' : 'default'" variant="light">{{ row.enabled ? '正常' : '已停用' }}</t-tag>
-        </template>
-        <template #actions="{ row }">
-          <div class="admin-actions">
-            <t-button size="small" variant="text" @click="open('edit', row)">编辑</t-button>
-            <t-button size="small" variant="text" @click="open('grant', row)">添加积分</t-button>
-            <t-button size="small" variant="text" @click="openHistory(row)">积分记录</t-button>
-            <t-button v-if="row.enabled" size="small" theme="danger" variant="text" @click="open('disable', row)">停用</t-button>
-          </div>
-        </template>
-      </t-table>
-    </div>
-    <div v-if="page > 1 || hasMore" class="admin-actions admin-pages">
-      <t-button size="small" variant="outline" :disabled="loading || page === 1" @click="load(page - 1)">上一页</t-button>
-      <span>第 {{ page }} 页</span>
-      <t-button size="small" variant="outline" :disabled="loading || !hasMore" @click="load(page + 1)">下一页</t-button>
-    </div>
+      <t-alert v-if="error" class="admin-feedback" theme="error" :message="error" />
+      <div class="admin-table">
+        <t-table :data="rows" :columns="columns" :loading="loading" row-key="id" hover empty="没有找到用户">
+          <template #phone="{ row }">
+            <strong v-if="row.username" class="admin-user-name">{{ row.username }}</strong>
+            <p :class="['admin-number', row.username ? 'secondary-text' : 'admin-user-name']">{{ row.phone }}</p>
+          </template>
+          <template #points="{ row }"><span class="admin-number">{{ row.points.toLocaleString('zh-CN') }}</span></template>
+          <template #enabled="{ row }">
+            <t-tag :theme="row.enabled ? 'success' : 'default'" variant="light">{{ row.enabled ? '正常' : '已停用' }}</t-tag>
+          </template>
+          <template #actions="{ row }">
+            <div class="admin-row-actions">
+              <t-button variant="text" theme="default" @click="open('edit', row)">编辑</t-button>
+              <t-button variant="text" theme="default" @click="openHistory(row)">积分记录</t-button>
+              <t-button v-if="row.enabled" theme="danger" variant="text" @click="open('disable', row)">停用</t-button>
+              <t-button variant="outline" @click="open('grant', row)">添加积分</t-button>
+            </div>
+          </template>
+        </t-table>
+      </div>
+      <div v-if="page > 1 || hasMore" class="admin-actions admin-pages">
+        <t-button size="small" variant="outline" :disabled="loading || page === 1" @click="load(page - 1)">上一页</t-button>
+        <span>第 {{ page }} 页</span>
+        <t-button size="small" variant="outline" :disabled="loading || !hasMore" @click="load(page + 1)">下一页</t-button>
+      </div>
+    </t-card>
     <t-dialog :visible="!!action" :header="action ? titles[action] : ''" :confirm-btn="confirm"
       :cancel-btn="action === 'history' ? '关闭' : '取消'" @confirm="save" @close="close" @cancel="close">
       <t-form v-if="action === 'create' || action === 'edit'" :data="form" label-align="top" @submit="save">
